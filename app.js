@@ -150,27 +150,29 @@ function fetchHistory() {
     const listElement = document.getElementById('history-body');
     fetch('http://localhost:3000/api/expenses')
         .then(response => {
-            if (!response.ok) throw new Error(`Error en la red: ${response.status}`);
+            if (!response.ok) throw new Error('Error en la red: ' + response.status);
             return response.json();
         })
         .then(data => {
             console.log("Datos recibidos:", data);
-            if (!Array.isArray(data) || data.length === 0) {
+            if (!Array.isArray(data.expenses) || data.expenses.length === 0) {
                 listElement.innerHTML = '<tr style="padding: 20px; text-align: center;">No hay gastos registrados.</tr>';
             } else {
-                listElement.innerHTML = data.map(item => {
-                    const payerName = item.payer === 'me' ? 'Tin' : (item.payer === 'partner' ? 'Noe' : item.payer);
-                    return `
-                        <tr style="border-bottom: 1px solid var(--border-color);">
-                            <td style="padding: 10px; text-align: left;">${item.date || 'Sin fecha'}</td>
-                            <td style="padding: 10px; text-align: left;">${item.description || 'Sin descripción'}</td>
-                            <td style="padding: 10px; text-align: left;">${item.category || 'Sin categoría'}</td>
-                            <td style="padding: 10px; text-align: center;">$${item.amount}</td>
-                            <td style="padding: 10px; text-align: left;">${payerName}</td>
-                        </tr>
-                    `;
+                listElement.innerHTML = data.expenses.map(function(item) {
+                    var payerName = item.payer === 'me' ? 'Tin' : (item.payer === 'partner' ? 'Noe' : item.payer);
+                    var row = '<tr style="border-bottom: 1px solid var(--border-color);">';
+                    row += '<td style="padding: 10px; text-align: left;">' + (item.date || 'Sin fecha') + '</td>';
+                    row += '<td style="padding: 10px; text-align: left;">' + (item.description || 'Sin descripción') + '</td>';
+                    row += '<td style="padding: 10px; text-align: left;">' + (item.category || 'Sin categoría') + '</td>';
+                    row += '<td style="padding: 10px; text-align: center;">$' + item.amount + '</td>';
+                    row += '<td style="padding: 10px; text-align: left;">' + payerName + '</td>';
+                    row += '</tr>';
+                    return row;
                 }).join('');
-                updateChart(data);
+                updateChart(data.expenses);
+                if (document.getElementById('debt-status')) {
+                    document.getElementById('debt-status').innerText = 'Saldo: ' + data.summary.status + ' $' + data.summary.balance;
+                }
             }
         })
         .catch(error => {
