@@ -25,7 +25,25 @@ app.get('/api/expenses', (req, res) => {
             console.error(`[ERROR_QUERY] Fallo al obtener gastos: ${err}`);
             res.status(500).json({ error: 'Error interno en la base de datos' });
         } else {
-            res.json(rows || []);
+            let totalMe = 0;
+            let totalPartner = 0;
+            rows.forEach(row => {
+                if (row.payer === 'me') totalMe += row.amount;
+                else if (row.payer === 'partner') totalPartner += row.amount;
+            });
+            const difference = totalMe - totalPartner;
+            // If balance is positive, the partner owes me (difference / 2)
+            // Since it's a two-person app, we calculate how much one person must pay the other to equalize.
+            
+            res.json({
+                expenses: rows,
+                summary: {
+                    totalMe: totalMe,
+                    totalPartner: totalPartner,
+                    balance: difference > 0 ? (difference / 2).toFixed(2) : (Math.abs(difference) / 2).toFixed(2),
+                    status: difference > 0 ? "Te deben" : "Le debes"
+                }
+            });
         }
     });
 });
