@@ -58,12 +58,12 @@ function get_weather(latitude, longitude) {
 async function submitExpense(amount, description) {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        alert("El monto debe ser un número válido mayor a cero.");
+        Swal.fire('Atención', 'El monto debe ser un número válido mayor a cero.', 'warning');
         return;
     }
 
     if (!description || description.trim() === "") {
-        alert("La descripción no puede estar vacía.");
+        Swal.fire('Atención', 'La descripción no puede estar vacía.', 'warning');
         return;
     }
 
@@ -80,15 +80,15 @@ async function submitExpense(amount, description) {
         });
 
         if (response.ok) {
-            alert('Gasto registrado con éxito');
+            Swal.fire('¡Éxito!', 'Gasto registrado con éxito', 'success');
             fetchHistory();
         } else {
             console.error('Error en el servidor:', response.statusText);
-            alert('Error en el servidor al guardar el gasto.');
+            Swal.fire('Error', 'Error en el servidor al guardar el gasto.', 'error');
         }
     } catch (err) {
         console.error('Error de conexión:', err);
-        alert('No se pudo conectar con el servidor local.');
+        Swal.fire('Fallo de conexión', 'No se pudo conectar con el servidor local.', 'error');
     }
 }
 
