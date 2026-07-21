@@ -10,30 +10,30 @@
 <body class="main-container">
     <div class="dashboard">
         <div id="expense-widget" class="widget">
-            <h2 style="font-size: 1.2rem; margin-bottom: 15px;">Gastos Compartidos</h2>
-            <p id="balance-text" style="font-size: 1.5rem; font-weight: bold; color: var(--accent-color);">Saldo: $0</p>
-            <p style="font-size: 0.9rem; color: var(--text-secondary);">Estado de cuentas con pareja</p>
-            <p id="debt-status" style="font-size: 1rem; font-weight: bold; margin-bottom: 5px;">Cargando estado...</p>
-            <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                <input type="number" id="expenseAmount" placeholder="Monto (ej. 1000)" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);">
-                <input type="text" id="expenseDesc" placeholder="Descripción (ej. Super)" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);">
-                <select id="expenseCategory" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);">
+            <h2 class="widget-title">Gastos Compartidos</h2>
+            <p id="balance-text">Saldo: $0</p>
+            <p class="status-label">Estado de cuentas con pareja</p>
+            <p id="debt-status">Cargando estado...</p>
+            <div class="form-container">
+                <input type="number" id="expenseAmount" placeholder="Monto (ej. 1000)" class="form-control">
+                <input type="text" id="expenseDesc" placeholder="Descripción (ej. Super)" class="form-control">
+                <select id="expenseCategory" class="form-control">
                     <option value="Alimentación">Alimentación</option>
                     <option value="Transporte">Transporte</option>
                     <option value="Ocio">Ocio</option>
                     <option value="Servicios">Servicios</option>
                     <option value="Otros">Otros</option>
                 </select>
-                <select id="expensePayer" style="padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);">
+                <select id="expensePayer" class="form-control">
                     <option value="me">Tin</option>
                     <option value="partner">Noe</option>
                 </select>
-                <button onclick="submitExpense(document.getElementById('expenseAmount').value, document.getElementById('expenseDesc').value)" style="padding: 10px; border-radius: 8px; background: var(--accent-color); color: white; border: none; cursor: pointer; font-weight: bold;">Agregar Gasto</button>
+                <button onclick="submitExpense(document.getElementById('expenseAmount').value, document.getElementById('expenseDesc').value)" class="btn-action">Agregar Gasto</button>
             </div>
         </div>
         <div id="history-widget" class="widget">
-            <h2 style="font-size: 1.2rem; margin-bottom: 15px;">Historial de Gastos</h2>
-            <div>
+            <h2 class="widget-title">Historial de Gastos</h2>
+            <input type="text" id="search-input" placeholder="Buscar por descripción..." class="form-control">
                 <table id="history-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                     <thead>
                         <tr style="border-bottom: 2px solid var(--border-color);">
@@ -51,7 +51,7 @@
             </div>
         </div>
         <div id="chart-widget" class="widget">
-            <h2 style="font-size: 1.2rem; margin-bottom: 15px;">Distribución por Categoría</h2>
+            <h2 class="widget-title">Distribución por Categoría</h2>
             <canvas id="categoryChart"></canvas>
         </div>
     </div>
