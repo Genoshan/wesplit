@@ -154,11 +154,13 @@ function fetchHistory() {
             return response.json();
         })
         .then(data => {
-            console.log("Datos recibidos:", data);
-            if (!Array.isArray(data.expenses) || data.expenses.length === 0) {
+            console.log("Data recibida:", data);
+            const items = data.expenses || [];
+            
+            if (items.length === 0) {
                 listElement.innerHTML = '<tr style="padding: 20px; text-align: center;">No hay gastos registrados.</tr>';
             } else {
-                listElement.innerHTML = data.expenses.map(function(item) {
+                listElement.innerHTML = items.map(function(item) {
                     var payerName = item.payer === 'me' ? 'Tin' : (item.payer === 'partner' ? 'Noe' : item.payer);
                     var row = '<tr style="border-bottom: 1px solid var(--border-color);">';
                     row += '<td style="padding: 10px; text-align: left;">' + (item.date || 'Sin fecha') + '</td>';
@@ -169,10 +171,13 @@ function fetchHistory() {
                     row += '</tr>';
                     return row;
                 }).join('');
-                updateChart(data.expenses);
-                if (document.getElementById('debt-status')) {
-                    document.getElementById('debt-status').innerText = 'Saldo: ' + data.summary.status + ' $' + data.summary.balance;
-                }
+                updateChart(items);
+            }
+
+            if (document.getElementById('debt-status')) {
+                var status = (data.summary && data.summary.status) ? data.summary.status : 'Sin info';
+                var balance = (data.summary && data.summary.balance) ? data.summary.balance : 0;
+                document.getElementById('debt-status').innerText = 'Saldo: ' + status + ' $' + balance;
             }
         })
         .catch(error => {
