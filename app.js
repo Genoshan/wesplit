@@ -1,71 +1,100 @@
-
 const themeKey = 'seg_theme';
 const defaultTheme = 'github';
+let categoryChartInstance = null;
+let allExpenses = [];
+let isSubmittingExpense = false;
+let feedbackTimeout = null;
+let historyFilters = {
+    search: '',
+    category: '',
+    payer: ''
+};
 
-if (localStorage.getItem(themeKey)) {
-    document.documentElement.setAttribute('data-theme', localStorage.getItem(themeKey));
-}
+document.documentElement.setAttribute('data-theme', localStorage.getItem(themeKey) || defaultTheme);
 
 function changeTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(themeKey, theme);
 }
 
-// --- RELOJ Y FECHA ---
-function updateClock() {
-    try {
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const clockEl = document.getElementById('clockDisplay');
-        if (clockEl) clockEl.textContent = `${hours}:${minutes}:${seconds}`;
-
-        const options = {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        };
-        const dateEl = document.getElementById('dateDisplay');
-        if (dateEl) dateEl.textContent = now.toLocaleDateString('es-ES', options);
-    } catch (e) {
-        console.error("Error en reloj:", e);
-    }
+function formatCurrency(value) {
+    return new Intl.NumberFormat('es-UY', {
+        style: 'currency',
+        currency: 'UYU',
+        maximumFractionDigits: 0
+    }).format(Number(value || 0));
 }
 
-// --- CLIMA ---
-function get_weather(latitude, longitude) {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&temperature_unit=celsius&wind_unit=ms&precipitation_unit=mm&timezone=auto&forecast_days=1`;
+function formatDate(value) {
+    if (!value) return 'Sin fecha';
 
-    fetch(url)
-        .then(response => response.json())
-        .then(data => {
-            let city = "Montevideo";
-            const temperature = Math.round(data.current_weather.temperature);
-            const description = data.current_weather.description;
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
 
-            document.getElementById('city').textContent = city;
-            document.getElementById('temperature').textContent = temperature + 'C';
-            document.getElementById('description').textContent = description;
-        })
-        .catch(error => {
-            console.error('Error en clima:', error);
-        });
+    return new Intl.DateTimeFormat('es-UY', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    }).format(date);
 }
 
-// --- GASTOS Y LISTA (HISTORIAL) ---
+function parseExpenseDate(value) {
+    if (!value) return null;
+
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function payerName(payer) {
+    if (payer === 'me') return 'Tin';
+    if (payer === 'partner') return 'Noe';
+    return payer || 'Sin pagador';
+}
+
+function categoryName(category) {
+    return category || 'Otros';
+}
+
+function setSubmitState(isSaving) {
+    const button = document.getElementById('submit-expense');
+    if (!button) return;
+
+    isSubmittingExpense = isSaving;
+    button.disabled = isSaving;
+    button.textContent = isSaving ? 'Guardando...' : 'Agregar gasto';
+}
+
+function showFormFeedback(message, type = 'success') {
+    const feedback = document.getElementById('form-feedback');
+    if (!feedback) return;
+
+    window.clearTimeout(feedbackTimeout);
+    feedback.textContent = message;
+    feedback.className = `form-feedback is-${type}`;
+
+    feedbackTimeout = window.setTimeout(() => {
+        feedback.textContent = '';
+        feedback.className = 'form-feedback';
+    }, 3200);
+}
+
 async function submitExpense(amount, description) {
+    if (isSubmittingExpense) return;
+
     const parsedAmount = parseFloat(amount);
+    const cleanDescription = description ? description.trim() : '';
+
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
         Swal.fire('Atención', 'El monto debe ser un número válido mayor a cero.', 'warning');
         return;
     }
 
-    if (!description || description.trim() === "") {
+    if (!cleanDescription) {
         Swal.fire('Atención', 'La descripción no puede estar vacía.', 'warning');
         return;
     }
+
+    setSubmitState(true);
 
     try {
         const response = await fetch('http://localhost:3000/api/expense', {
@@ -73,177 +102,321 @@ async function submitExpense(amount, description) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 amount: parsedAmount,
-                description: description,
+                description: cleanDescription,
+                category: document.getElementById('expenseCategory').value,
                 payer: document.getElementById('expensePayer').value,
                 date: new Date().toISOString().split('T')[0]
             })
         });
 
-        if (response.ok) {
-            Swal.fire('¡Éxito!', 'Gasto registrado con éxito', 'success');
-            fetchHistory();
-        } else {
+        if (!response.ok) {
             console.error('Error en el servidor:', response.statusText);
             Swal.fire('Error', 'Error en el servidor al guardar el gasto.', 'error');
+            return;
         }
+
+        document.getElementById('expense-form').reset();
+        showFormFeedback('Gasto agregado. El resumen ya está actualizado.');
+        await fetchHistory();
+        document.getElementById('expenseAmount').focus();
     } catch (err) {
         console.error('Error de conexión:', err);
         Swal.fire('Fallo de conexión', 'No se pudo conectar con el servidor local.', 'error');
+    } finally {
+        setSubmitState(false);
     }
 }
 
-let categoryChartInstance = null;
+function processCategoryData(data) {
+    const categoryTotals = {};
+
+    data.forEach(item => {
+        const category = categoryName(item.category);
+        categoryTotals[category] = (categoryTotals[category] || 0) + parseFloat(item.amount || 0);
+    });
+
+    const defaultCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+    const labels = defaultCategories;
+    const values = labels.map(category => categoryTotals[category] || 0);
+
+    return {
+        labels,
+        values,
+        total: values.reduce((sum, value) => sum + value, 0),
+        topCategory: getTopCategoryFromTotals(categoryTotals)
+    };
+}
+
+function getTopCategoryFromTotals(categoryTotals) {
+    const entries = Object.entries(categoryTotals).filter(([, total]) => total > 0);
+    if (entries.length === 0) return null;
+
+    return entries.sort((a, b) => b[1] - a[1])[0];
+}
 
 function updateChart(data) {
-    const ctx = document.getElementById('categoryChart').getContext('2d');
+    const canvas = document.getElementById('categoryChart');
+    const emptyState = document.getElementById('chart-empty');
+    const chartSummary = document.getElementById('chart-summary');
+    if (!canvas || typeof Chart === 'undefined') return;
+
     const processedData = processCategoryData(data);
 
     if (categoryChartInstance) {
         categoryChartInstance.destroy();
+        categoryChartInstance = null;
     }
 
-    categoryChartInstance = new Chart(ctx, {
+    if (processedData.total <= 0) {
+        canvas.hidden = true;
+        if (emptyState) emptyState.hidden = false;
+        if (chartSummary) chartSummary.textContent = 'Sin datos para comparar todavía.';
+        return;
+    }
+
+    canvas.hidden = false;
+    if (emptyState) emptyState.hidden = true;
+
+    if (chartSummary && processedData.topCategory) {
+        const [category, total] = processedData.topCategory;
+        chartSummary.textContent = `${category} concentra ${formatCurrency(total)}.`;
+    }
+
+    categoryChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: processedData.labels,
             datasets: [{
                 data: processedData.values,
-                backgroundColor: [
-                    '#ff6384', '#36a2bd', '#ffcd56', '#c95b82', '#9966ff'
-                ],
-                borderWidth: 1
+                backgroundColor: ['#2f80ed', '#27ae60', '#f2c94c', '#9b51e0', '#eb5757'],
+                borderWidth: 0
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom',
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: context => {
+                            const label = context.label || 'Categoría';
+                            return `${label}: ${formatCurrency(context.parsed)}`;
+                        }
+                    }
                 }
             }
         }
     });
 }
-function processCategoryData(data) {
-    const categoryTotals = {};
-    data.forEach(item => {
-        const cat = item.category || 'Otros';
-        categoryTotals[cat] = (categoryTotals[cat] || 0) + parseFloat(item.amount || 0);
-    });
 
-    const defaultCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
-    const labels = [];
-    const values = [];
-
-    defaultCategories.forEach(cat => {
-        labels.push(cat);
-        values.push(categoryTotals[cat] || 0);
-    });
-
-    return {
-        labels,
-        values
-    };
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
-function fetchHistory() {
-    const listElement = document.getElementById('history-body');
-    fetch('http://localhost:3000/api/expenses')
-        .then(response => {
-            if (!response.ok) throw new Error('Error en la red: ' + response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log("Data recibida:", data);
-            const items = data.expenses || [];
-            
-            if (items.length === 0) {
-                listElement.innerHTML = '<tr style="padding: 20px; text-align: center;">No hay gastos registrados.</tr>';
-            } else {
-                listElement.innerHTML = items.map(function(item) {
-                    var payerName = item.payer === 'me' ? 'Tin' : (item.payer === 'partner' ? 'Noe' : item.payer);
-                    var row = '<tr style="border-bottom: 1px solid var(--border-color);">';
-                    row += '<td style="padding: 10px; text-align: left;">' + (item.date || 'Sin fecha') + '</td>';
-                    row += '<td style="padding: 10px; text-align: left;">' + (item.description || 'Sin descripción') + '</td>';
-                    row += '<td style="padding: 10px; text-align: left;">' + (item.category || 'Sin categoría') + '</td>';
-                    row += '<td style="padding: 10px; text-align: center;">$' + item.amount + '</td>';
-                    row += '<td style="padding: 10px; text-align: left;">' + payerName + '</td>';
-                    row += '</tr>';
-                    return row;
-                }).join('');
-                updateChart(items);
-            }
+function renderHistory(items) {
+    const historyBody = document.getElementById('history-body');
+    updateHistoryCount(items.length);
 
-            if (document.getElementById('debt-status')) {
-                var status = (data.summary && data.summary.status) ? data.summary.status : 'Sin info';
-                var balance = (data.summary && data.summary.balance) ? data.summary.balance : 0;
-                document.getElementById('debt-status').innerText = 'Saldo: ' + status + ' $' + balance;
-            }
-        })
-        .catch(error => {
-            console.error('Error en fetchHistory:', error);
-            listElement.innerHTML = '<tr style="padding: 20px; text-align: center; color: var(--text-danger);">Error al cargar historial.</tr>';
-        });
-}
-
-// --- DRAG & DROP (SORTABLE) ---
-function initDragAndDrop() {
-    const container = document.querySelector('.dashboard');
-    if (!container) {
-        console.error("Error: No se encontró el contenedor .dashboard");
+    if (items.length === 0) {
+        historyBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
         return;
     }
 
-    if (typeof Sortable !== 'undefined') {
-        Sortable.create(container, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: function() {
-                const order = Array.from(container.children).map(el => el.id);
-                localStorage.setItem('dashboard_order', JSON.stringify(order));
-                console.log("Nuevo orden guardado:", order);
-            }
-        });
-        console.log("Sortable inicializado correctamente");
-    } else {
-        console.error("Error: Sortable no está definido. Revisa si la librería se cargó correctamente.");
+    historyBody.innerHTML = items.map(item => {
+        const paidBy = payerName(item.payer);
+
+        return `
+            <tr>
+                <td>${escapeHtml(formatDate(item.date))}</td>
+                <td class="fw-medium">${escapeHtml(item.description || 'Sin descripción')}</td>
+                <td><span class="category-pill">${escapeHtml(categoryName(item.category))}</span></td>
+                <td class="text-end fw-semibold">${escapeHtml(formatCurrency(item.amount))}</td>
+                <td><span class="payer-pill payer-${escapeHtml(item.payer || 'unknown')}">${escapeHtml(paidBy)}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateHistoryCount(count) {
+    const countElement = document.getElementById('history-count');
+    if (!countElement) return;
+
+    countElement.textContent = count === 1 ? '1 gasto' : `${count} gastos`;
+}
+
+function buildBalanceMessage(summary) {
+    if (!summary) return 'Sin información de saldo.';
+
+    const balance = Number(summary.balance || 0);
+    if (balance === 0) return 'Están a mano.';
+
+    if (summary.status === 'Te deben') {
+        return `Noe le debe ${formatCurrency(balance)} a Tin.`;
+    }
+
+    return `Tin le debe ${formatCurrency(balance)} a Noe.`;
+}
+
+function updateSummary(summary, items) {
+    document.getElementById('expense-count').textContent = items.length;
+    updateComputedMetrics(items);
+
+    if (!summary) {
+        document.getElementById('debt-status').textContent = 'Sin información de saldo.';
+        document.getElementById('balance-text').textContent = formatCurrency(0);
+        document.getElementById('total-me').textContent = formatCurrency(0);
+        document.getElementById('total-partner').textContent = formatCurrency(0);
+        return;
+    }
+
+    document.getElementById('debt-status').textContent = buildBalanceMessage(summary);
+    document.getElementById('balance-text').textContent = formatCurrency(summary.balance);
+    document.getElementById('total-me').textContent = formatCurrency(summary.totalMe);
+    document.getElementById('total-partner').textContent = formatCurrency(summary.totalPartner);
+}
+
+function updateComputedMetrics(items) {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const categoryTotals = {};
+
+    let totalSpent = 0;
+    let monthTotal = 0;
+
+    items.forEach(item => {
+        const amount = Number(item.amount || 0);
+        const expenseDate = parseExpenseDate(item.date);
+
+        totalSpent += amount;
+        categoryTotals[categoryName(item.category)] = (categoryTotals[categoryName(item.category)] || 0) + amount;
+
+        if (expenseDate && expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear) {
+            monthTotal += amount;
+        }
+    });
+
+    const topCategory = getTopCategoryFromTotals(categoryTotals);
+
+    document.getElementById('total-spent').textContent = formatCurrency(totalSpent);
+    document.getElementById('month-total').textContent = formatCurrency(monthTotal);
+    document.getElementById('top-category').textContent = topCategory ? topCategory[0] : '-';
+}
+
+async function fetchHistory() {
+    const historyBody = document.getElementById('history-body');
+
+    try {
+        const response = await fetch('http://localhost:3000/api/expenses');
+        if (!response.ok) throw new Error('Error en la red: ' + response.status);
+
+        const data = await response.json();
+        allExpenses = data.expenses || [];
+        hydrateHistoryFilterOptions();
+        applyHistoryFilters();
+        updateChart(allExpenses);
+        updateSummary(data.summary, allExpenses);
+    } catch (error) {
+        console.error('Error en fetchHistory:', error);
+        historyBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
     }
 }
 
-function loadLayout() {
-    const container = document.querySelector('.dashboard');
-    const savedOrder = JSON.parse(localStorage.getItem('dashboard_order'));
-    if (savedOrder && savedOrder.length > 0) {
-        const items = Array.from(container.children);
-        const newOrder = [];
-        const seenIds = new Set();
+function applyHistoryFilters() {
+    const query = historyFilters.search.trim().toLowerCase();
 
-        savedOrder.forEach(id => {
-            const item = items.find(el => el.id === id);
-            if (item) {
-                newOrder.push(item);
-                seenIds.add(id);
-            }
-        });
+    const filteredExpenses = allExpenses.filter(item => {
+        const matchesSearch = !query || [
+            item.description,
+            categoryName(item.category),
+            payerName(item.payer),
+            item.date,
+            item.amount
+        ].some(value => String(value || '').toLowerCase().includes(query));
 
-        items.forEach(item => {
-            if (!seenIds.has(item.id)) newOrder.push(item);
-        });
+        const matchesCategory = !historyFilters.category || categoryName(item.category) === historyFilters.category;
+        const matchesPayer = !historyFilters.payer || item.payer === historyFilters.payer;
 
-        newOrder.forEach(item => container.appendChild(item));
-    }
+        return matchesSearch && matchesCategory && matchesPayer;
+    });
+
+    renderHistory(filteredExpenses);
 }
 
-// --- INICIALIZACIÓN ---
+function filterHistory(searchValue) {
+    historyFilters.search = searchValue;
+    applyHistoryFilters();
+}
+
+function setCategoryFilter(category) {
+    historyFilters.category = category;
+    applyHistoryFilters();
+}
+
+function setPayerFilter(payer) {
+    historyFilters.payer = payer;
+    applyHistoryFilters();
+}
+
+function hydrateHistoryFilterOptions() {
+    const categoryFilter = document.getElementById('category-filter');
+    if (!categoryFilter) return;
+
+    const categories = Array.from(new Set(allExpenses.map(item => categoryName(item.category)))).sort();
+    const selectedCategory = categoryFilter.value;
+
+    categoryFilter.innerHTML = '<option value="">Todas las categorías</option>' + categories.map(category => {
+        return `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`;
+    }).join('');
+
+    categoryFilter.value = categories.includes(selectedCategory) ? selectedCategory : '';
+    historyFilters.category = categoryFilter.value;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('expense-form');
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const payerFilter = document.getElementById('payer-filter');
+
+    if (form) {
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            submitExpense(
+                document.getElementById('expenseAmount').value,
+                document.getElementById('expenseDesc').value
+            );
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', event => {
+            filterHistory(event.target.value);
+        });
+    }
+
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', event => {
+            setCategoryFilter(event.target.value);
+        });
+    }
+
+    if (payerFilter) {
+        payerFilter.addEventListener('change', event => {
+            setPayerFilter(event.target.value);
+        });
+    }
+
     fetchHistory();
-    updateClock();
-    setInterval(updateClock, 1000);
-    loadLayout();
-    initDragAndDrop();
 });
 
 window.changeTheme = changeTheme;
 window.submitExpense = submitExpense;
-window.update_clock = updateClock;
-window.get_weather = get_weather;

@@ -1,77 +1,165 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta utmp="true" content="1">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Gastos Compartidos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="main-container">
-    <div class="dashboard">
-        <div id="expense-widget" class="widget">
-            <h2 class="widget-title">Gastos Compartidos</h2>
-            <p id="balance-text">Saldo: $0</p>
-            <p class="status-label">Estado de cuentas con pareja</p>
-            <p id="debt-status">Cargando estado...</p>
-            <div class="form-container">
-                <input type="number" id="expenseAmount" placeholder="Monto (ej. 1000)" class="form-control">
-                <input type="text" id="expenseDesc" placeholder="Descripción (ej. Super)" class="form-control">
-                <select id="expenseCategory" class="form-control">
-                    <option value="Alimentación">Alimentación</option>
-                    <option value="Transporte">Transporte</option>
-                    <option value="Ocio">Ocio</option>
-                    <option value="Servicios">Servicios</option>
-                    <option value="Otros">Otros</option>
-                </select>
-                <select id="expensePayer" class="form-control">
-                    <option value="me">Tin</option>
-                    <option value="partner">Noe</option>
-                </select>
-                <button onclick="submitExpense(document.getElementById('expenseAmount').value, document.getElementById('expenseDesc').value)" class="btn-action">Agregar Gasto</button>
+<body>
+    <main class="app-shell">
+        <header class="app-header">
+            <div>
+                <p class="eyebrow">Tin y Noe</p>
+                <h1>Gastos Compartidos</h1>
             </div>
-        </div>
-        <div id="history-widget" class="widget">
-            <h2 class="widget-title">Historial de Gastos</h2>
-            <input type="text" id="search-input" placeholder="Buscar por descripción..." class="form-control">
-                <table id="history-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid var(--border-color);">
-                            <th style="padding: 8px; text-align: left;">Fecha</th>
-                            <th style="padding: 8px; text-align: left;">Descripción</th>
-                            <th style="padding: 8px; text-align: left;">Categoría</th>
-                            <th style="padding: 8px; text-align: center;">Monto</th>
-                            <th style="padding: 8px; text-align: left;">Pagador</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history-body">
-                        <tr style="padding: 20px; text-align: center;">Cargando historial...</tr>
-                    </tbody>
-                </table>
+            <p class="header-copy">Seguimiento simple de gastos, saldos y quién pagó qué.</p>
+        </header>
+
+        <section class="balance-panel" aria-labelledby="balance-title">
+            <div>
+                <p class="eyebrow">Balance actual</p>
+                <h2 id="balance-title">Estado de cuentas</h2>
+                <p id="debt-status" class="balance-message">Cargando estado...</p>
             </div>
-        </div>
-        <div id="chart-widget" class="widget">
-            <h2 class="widget-title">Distribución por Categoría</h2>
-            <canvas id="categoryChart"></canvas>
-        </div>
-    </div>
+            <div class="balance-amount">
+                <span>Saldo</span>
+                <strong id="balance-text">$0</strong>
+            </div>
+        </section>
 
-    <div id="theme-selector-container">
-        <div class="controls-group">
-            <select id="themeSelect" onchange="changeTheme(this.value)">
-                <option value="dracula">Dracula</option>
-                <option value="nord">Nord (Midnight)</option>
-                <option value="github">GitHub Light</option>
-            </select>
-            <button onclick="alert('Settings menu')" style="padding: 8px; border-radius: 10px; background: var(--card-bg); color: var(--text-primary); border: 2px solid var(--border-color); cursor: pointer; font-weight: bold; margin-left: 5px;">Settings</button>
-        </div>
-        <div id="clock" class="mini-clock">
-            <h2 id="clockDisplay">00:00:00</h2>
-            <p id="dateDisplay">-- -- ----</p>
-        </div>
-    </div>
+        <section class="summary-grid" aria-label="Resumen de gastos">
+            <article class="metric-card">
+                <span>Pagó Tin</span>
+                <strong id="total-me">$0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Pagó Noe</span>
+                <strong id="total-partner">$0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Movimientos</span>
+                <strong id="expense-count">0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Total registrado</span>
+                <strong id="total-spent">$0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Este mes</span>
+                <strong id="month-total">$0</strong>
+            </article>
+            <article class="metric-card">
+                <span>Mayor categoría</span>
+                <strong id="top-category">-</strong>
+            </article>
+        </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/_loader.js"></script>
+        <div class="content-grid">
+            <section class="card app-card" aria-labelledby="form-title">
+                <div class="card-body p-4">
+                    <div class="section-heading">
+                        <p class="eyebrow">Nuevo movimiento</p>
+                        <h2 id="form-title">Agregar gasto</h2>
+                    </div>
+
+                    <form id="expense-form" class="form-container">
+                        <label for="expenseAmount">Monto</label>
+                        <input type="number" id="expenseAmount" placeholder="Ej. 1000" class="form-control form-control-lg" min="1" step="0.01" required>
+
+                        <label for="expenseDesc">Descripción</label>
+                        <input type="text" id="expenseDesc" placeholder="Ej. Super" class="form-control" required>
+
+                        <label for="expenseCategory">Categoría</label>
+                        <select id="expenseCategory" class="form-select" required>
+                            <option value="Alimentación">Alimentación</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Ocio">Ocio</option>
+                            <option value="Servicios">Servicios</option>
+                            <option value="Otros">Otros</option>
+                        </select>
+
+                        <label for="expensePayer">Pagó</label>
+                        <select id="expensePayer" class="form-select" required>
+                            <option value="me">Tin</option>
+                            <option value="partner">Noe</option>
+                        </select>
+
+                        <button id="submit-expense" type="submit" class="btn btn-primary btn-action w-100">
+                            Agregar gasto
+                        </button>
+                        <p id="form-feedback" class="form-feedback" role="status" aria-live="polite"></p>
+                    </form>
+                </div>
+            </section>
+
+            <section class="card app-card history-card" aria-labelledby="history-title">
+                <div class="card-body p-4">
+                    <div class="section-heading history-heading">
+                        <div>
+                            <p class="eyebrow">Actividad</p>
+                            <h2 id="history-title">Historial de gastos</h2>
+                        </div>
+                        <span id="history-count" class="history-count">0 gastos</span>
+                    </div>
+
+                    <div class="history-filters" aria-label="Filtros del historial">
+                        <input type="text" id="search-input" placeholder="Buscar..." class="form-control search-input">
+                        <select id="category-filter" class="form-select filter-select" aria-label="Filtrar por categoría">
+                            <option value="">Todas las categorías</option>
+                            <option value="Alimentación">Alimentación</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Ocio">Ocio</option>
+                            <option value="Servicios">Servicios</option>
+                            <option value="Otros">Otros</option>
+                        </select>
+                        <select id="payer-filter" class="form-select filter-select" aria-label="Filtrar por pagador">
+                            <option value="">Todos los pagadores</option>
+                            <option value="me">Tin</option>
+                            <option value="partner">Noe</option>
+                        </select>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="history-table" class="table table-hover table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="text-start">Fecha</th>
+                                    <th class="text-start">Descripción</th>
+                                    <th class="text-start">Categoría</th>
+                                    <th class="text-end">Monto</th>
+                                    <th class="text-start">Pagador</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-body">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">Cargando historial...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <section class="card app-card chart-card" aria-labelledby="chart-title">
+            <div class="card-body p-4">
+                <div class="section-heading chart-heading">
+                    <div>
+                        <p class="eyebrow">Categorías</p>
+                        <h2 id="chart-title">Distribución por categoría</h2>
+                    </div>
+                    <p id="chart-summary" class="chart-summary">Cargando categorías...</p>
+                </div>
+                <div class="chart-area">
+                    <canvas id="categoryChart"></canvas>
+                    <p id="chart-empty" class="chart-empty" hidden>No hay gastos con monto para graficar.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
