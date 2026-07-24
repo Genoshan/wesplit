@@ -97,7 +97,7 @@ async function submitExpense(amount, description) {
     setSubmitState(true);
 
     try {
-        const response = await fetch('http://localhost:3000/api/expense', {
+        const response = await fetch('http://localhost:4000/api/expense', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -315,7 +315,7 @@ async function fetchHistory() {
     const historyBody = document.getElementById('history-body');
 
     try {
-        const response = await fetch('http://localhost:3000/api/expenses');
+        const response = await fetch('http://localhost:4000/api/expenses');
         if (!response.ok) throw new Error('Error en la red: ' + response.status);
 
         const data = await response.json();
