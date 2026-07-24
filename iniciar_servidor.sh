@@ -15,7 +15,7 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-echo "Iniciando el servidor en el puerto 3000..."
+echo "Iniciando el servidor en el puerto 4000..."
 echo "(El servidor se iniciará en segundo plano)"
 
 # Cambiar al directorio del script y lanzar Node guardando su PID
@@ -25,11 +25,11 @@ NEW_PID=$!
 echo $NEW_PID > "$PID_FILE"
 
 # Bucle para esperar a que el puerto 3000 esté activo
-while ! ss -tlnp | grep -q ":3000"; do
+while ! ss -tlnp | grep -q ":4000"; do
     sleep 1
 done
 
-echo "Puerto 3000 detectado. Abriendo navegador..."
-xdg-open "http://localhost:3000"
+echo "Puerto 4000 detectado. Abriendo navegador..."
+xdg-open "http://localhost:4000"
 
 echo "Todo listo."
