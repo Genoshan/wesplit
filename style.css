@@ -1,37 +1,104 @@
+/* GitHub Light (default) */
+[data-bs-theme="github"],
 :root {
-    --bg-color: #f3f5f7;
+    --bs-body-bg: #f3f5f7;
+    --bs-body-color: #1f2933;
+    --bs-border-color: #d9e1e8;
+    --bs-primary: #1769aa;
+    --bs-success: #257a4f;
+    
     --card-bg: #ffffff;
     --text-primary: #1f2933;
     --text-secondary: #697386;
     --accent-color: #1769aa;
     --accent-strong: #0f4c81;
-    --border-color: #d9e1e8;
     --soft-panel: #edf4f8;
     --success-color: #257a4f;
 }
 
-[data-theme="dracula"] {
-    --bg-color: #282a36;
+/* Dracula */
+[data-bs-theme="dracula"] {
+    --bs-body-bg: #282a36;
+    --bs-body-color: #f8f8f2;
+    --bs-border-color: #6272a4;
+    --bs-primary: #ff79c6;
+    --bs-success: #50fa7b;
+    
     --card-bg: #3a3d4f;
     --text-primary: #f8f8f2;
     --text-secondary: #c7cad8;
     --accent-color: #ff79c6;
     --accent-strong: #ff5bb8;
-    --border-color: #6272a4;
     --soft-panel: #343746;
     --success-color: #50fa7b;
 }
 
-[data-theme="nord"] {
-    --bg-color: #2e3440;
+/* Nord */
+[data-bs-theme="nord"] {
+    --bs-body-bg: #2e3440;
+    --bs-body-color: #eceff4;
+    --bs-border-color: #4c566a;
+    --bs-primary: #88c0d0;
+    --bs-success: #a3be8c;
+    
     --card-bg: #3b4252;
     --text-primary: #eceff4;
     --text-secondary: #d8dee9;
     --accent-color: #88c0d0;
     --accent-strong: #5e81ac;
-    --border-color: #4c566a;
     --soft-panel: #343c4a;
     --success-color: #a3be8c;
+}
+
+/* Fix Bootstrap table colors in dark themes */
+[data-bs-theme="dracula"] .table,
+[data-bs-theme="nord"] .table {
+    --bs-table-color: var(--text-primary);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--border-color);
+}
+
+/* Fix Bootstrap card and form in dark themes */
+[data-bs-theme="dracula"] .card,
+[data-bs-theme="nord"] .card {
+    --bs-card-bg: var(--card-bg);
+    --bs-card-color: var(--text-primary);
+    --bs-card-border-color: var(--border-color);
+}
+
+[data-bs-theme="dracula"] .form-control,
+[data-bs-theme="dracula"] .form-select,
+[data-bs-theme="nord"] .form-control,
+[data-bs-theme="nord"] .form-select {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+[data-bs-theme="dracula"] .form-control::placeholder,
+[data-bs-theme="nord"] .form-control::placeholder {
+    color: var(--text-secondary);
+    opacity: 1;
+}
+
+[data-bs-theme="dracula"] label,
+[data-bs-theme="nord"] label {
+    color: var(--text-secondary);
+}
+
+[data-bs-theme="dracula"] .btn-action,
+[data-bs-theme="nord"] .btn-action {
+    color: #fff;
+}
+
+[data-bs-theme="dracula"] .form-feedback,
+[data-bs-theme="nord"] .form-feedback {
+    color: var(--text-secondary);
+}
+
+[data-bs-theme="dracula"] .form-feedback.is-success,
+[data-bs-theme="nord"] .form-feedback.is-success {
+    color: var(--success-color);
 }
 
 html,
@@ -41,8 +108,8 @@ body {
 }
 
 body {
-    background: var(--bg-color);
-    color: var(--text-primary);
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -89,6 +156,17 @@ body {
     margin: 0;
     color: var(--text-secondary);
     text-align: right;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.theme-select {
+    min-width: 120px;
+    cursor: pointer;
 }
 
 .eyebrow {
@@ -300,11 +378,18 @@ body {
     border-bottom: 1px solid var(--border-color);
     font-size: 0.76rem;
     text-transform: uppercase;
+    background: transparent;
 }
 
 #history-table td {
     padding: 13px 10px;
     border-color: var(--border-color);
+    color: var(--text-primary);
+    background: transparent;
+}
+
+#history-table tbody tr:hover td {
+    background: var(--soft-panel);
 }
 
 .category-pill {

@@ -2,6 +2,9 @@
 
 ## Índice
 
+### Bitácora
+- [Bitácora de sesiones](BITACORA.md) — Registro cronológico de cambios y decisiones
+
 ### Logs Diarios
 - [2026-07-18](2026-07-18.md) — Resolución de carga de datos en frontend
 
@@ -19,4 +22,4 @@ Ver `AGENTS.md` en raíz del proyecto para:
 - Stack técnico
 - Reglas de desarrollo
 - Flujo de trabajo
-- Estructura del proyecto
+- Sistema de bitácora
