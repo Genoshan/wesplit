@@ -3,17 +3,16 @@ const defaultTheme = 'github';
 let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;
-let feedbackTimeout = null;
 let historyFilters = {
     search: '',
     category: '',
     payer: ''
 };
 
-document.documentElement.setAttribute('data-theme', localStorage.getItem(themeKey) || defaultTheme);
+document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
 
 function changeTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-bs-theme', theme);
     localStorage.setItem(themeKey, theme);
 }
 
@@ -64,20 +63,6 @@ function setSubmitState(isSaving) {
     button.textContent = isSaving ? 'Guardando...' : 'Agregar gasto';
 }
 
-function showFormFeedback(message, type = 'success') {
-    const feedback = document.getElementById('form-feedback');
-    if (!feedback) return;
-
-    window.clearTimeout(feedbackTimeout);
-    feedback.textContent = message;
-    feedback.className = `form-feedback is-${type}`;
-
-    feedbackTimeout = window.setTimeout(() => {
-        feedback.textContent = '';
-        feedback.className = 'form-feedback';
-    }, 3200);
-}
-
 async function submitExpense(amount, description) {
     if (isSubmittingExpense) return;
 
@@ -116,7 +101,7 @@ async function submitExpense(amount, description) {
         }
 
         document.getElementById('expense-form').reset();
-        showFormFeedback('Gasto agregado. El resumen ya está actualizado.');
+        Swal.fire('¡Éxito!', 'Gasto registrado con éxito', 'success');
         await fetchHistory();
         document.getElementById('expenseAmount').focus();
     } catch (err) {
@@ -326,6 +311,7 @@ async function fetchHistory() {
         updateSummary(data.summary, allExpenses);
     } catch (error) {
         console.error('Error en fetchHistory:', error);
+        Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
         historyBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
     }
 }

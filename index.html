@@ -14,7 +14,14 @@
                 <p class="eyebrow">Tin y Noe</p>
                 <h1>Gastos Compartidos</h1>
             </div>
-            <p class="header-copy">Seguimiento simple de gastos, saldos y quién pagó qué.</p>
+            <div class="header-actions">
+                <select id="themeSelect" class="form-select form-select-sm theme-select"
+                        onchange="changeTheme(this.value)" aria-label="Seleccionar tema">
+                        <option value="dracula">Dracula</option>
+                        <option value="nord">Nord</option>
+                        <option value="github">GitHub</option>
+                </select>
+            </div>
         </header>
 
         <section class="balance-panel" aria-labelledby="balance-title">
