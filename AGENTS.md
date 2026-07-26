@@ -55,8 +55,64 @@ node server/index.js
 netstat -ano | findstr :3000
 ```
 
+## Sistema de Memoria y Bitácora
+
+### Archivos de Memoria
+- `memory/MEMORY.md` — Índice principal de memoria
+- `memory/BITACORA.md` — Registro cronológico de sesiones
+- `.localcode/SESSION.md` — Estado actual del proyecto
+- `.localcode/DECISIONS.md` — Decisiones arquitectónicas
+
+### Flujo de Bitácora (Checkpoint Automático)
+
+**AL INICIO de cada sesión:**
+1. Leer `memory/BITACORA.md` para entender el contexto anterior
+2. Leer `.localcode/SESSION.md` para saber el estado actual
+3. Saludar al usuario con el contexto recuperado
+
+**DURANTE la sesión (checkpoint incremental):**
+- Después de cada commit, cambio importante o decisión → actualizar BITACORA.md
+- No esperar a que el usuario pregunte
+- No esperar al "final" de la sesión
+- Patrón: checkpoint como WAL en bases de datos
+
+**SI el usuario se despide o la sesión termina:**
+1. Actualizar BITACORA.md con resumen final
+2. Actualizar SESSION.md con estado actual
+3. Actualizar MEMORY.md si hay cambios estructurales
+
+**REGLAS CRÍTICAS:**
+- Checkpoint después de cada acción relevante — no esperar al final
+- NUNCA preguntar "¿actualizo la bitácora?" — SIEMPRE hacerlo
+- NUNCA preguntar "¿creo el archivo?" — crearlo directamente
+- SI el usuario se despide, activar protocolo de cierre automáticamente
+
+### Ejemplo de Entrada
+```markdown
+## [2026-07-25] Nombre de la Sesión
+
+### Contexto
+- Qué se estaba haciendo antes
+
+### Cambios realizados
+- Archivo A: se modificó X
+- Archivo B: se creó Y
+
+### Decisiones tomadas
+- Se decidió X porque Y
+- Alternativa descartada: Z
+
+### Estado final
+- Funcionalidad X implementada
+- Falta: Y
+
+### Notas para próxima sesión
+- Retomar con Y
+```
+
 ## Referencias
 
 - Estado actual: `.localcode/SESSION.md`
 - Decisiones: `.localcode/DECISIONS.md`
+- Bitácora: `memory/BITACORA.md`
 - Roadmap: `.localcode/ROADMAP.md` o `ROADMAP.md`
