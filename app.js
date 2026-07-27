@@ -10,6 +10,8 @@ let historyFilters = {
     month: ''
 };
 
+let currentUser = null;
+
 document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
 
 function changeTheme(theme) {
@@ -83,7 +85,7 @@ async function submitExpense(amount, description) {
     setSubmitState(true);
 
     try {
-        const response = await fetch('http://localhost:4000/api/expense', {
+        const response = await fetch('/api/expense', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -301,7 +303,7 @@ async function fetchHistory() {
     const historyBody = document.getElementById('history-body');
 
     try {
-        const response = await fetch('http://localhost:4000/api/expenses');
+        const response = await fetch('/api/expenses');
         if (!response.ok) throw new Error('Error en la red: ' + response.status);
 
         const data = await response.json();
@@ -394,6 +396,58 @@ function hydrateHistoryFilterOptions() {
     }
 }
 
+async function checkAuth() {
+    try {
+        const res = await fetch('/api/auth/check');
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        currentUser = data;
+        document.getElementById('login-screen').hidden = true;
+        document.getElementById('app-main').hidden = false;
+        document.getElementById('user-label').textContent = data.username === 'tin' ? 'Tin' : 'Noe';
+        const payerSelect = document.getElementById('expensePayer');
+        if (payerSelect) payerSelect.value = data.payer;
+        initApp();
+    } catch {
+        currentUser = null;
+        document.getElementById('login-screen').hidden = false;
+        document.getElementById('app-main').hidden = true;
+    }
+}
+
+async function loginUser(username, password, feedbackEl) {
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            feedbackEl.textContent = data.error || 'Credenciales inválidas';
+            feedbackEl.classList.add('text-danger');
+            return;
+        }
+        feedbackEl.textContent = '';
+        feedbackEl.classList.remove('text-danger');
+        checkAuth();
+    } catch {
+        feedbackEl.textContent = 'Error de conexión';
+        feedbackEl.classList.add('text-danger');
+    }
+}
+
+async function logoutUser() {
+    await fetch('/api/logout', { method: 'POST' });
+    currentUser = null;
+    document.getElementById('login-screen').hidden = false;
+    document.getElementById('app-main').hidden = true;
+}
+
+function initApp() {
+    fetchHistory();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('expense-form');
     const searchInput = document.getElementById('search-input');
@@ -435,8 +489,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    fetchHistory();
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', event => {
+            event.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const feedback = document.getElementById('login-feedback');
+            loginUser(username, password, feedback);
+        });
+    }
+
+    checkAuth();
 });
 
 window.changeTheme = changeTheme;
 window.submitExpense = submitExpense;
+window.logoutUser = logoutUser;

@@ -1,23 +1,84 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const db = require('./database');
+const { authMiddleware, login, logout, getUser } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middleware
-app.use(cors());
-app.use( bodyParser.json());
-app.use( bodyParser.urlencoded({ extended: true }));
+// Security
+app.use(helmet({ contentSecurityPolicy: false }));
 
-// Servir archivos estáticos desde la raíz (donde están index.html, style.css, app.js)
+// Rate limiting
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas peticiones, intentá de nuevo en un minuto' }
+});
+app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
+
+// Middleware
+app.use(bodyParser.json({ limit: '100kb' }));
+
+// Servir archivos estáticos (login incluido)
 app.use(express.static(path.join(__dirname, '..')));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
+
+// Auth endpoints (no requieren autenticación)
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Faltan credenciales' });
+    }
+
+    const token = login(username, password);
+    if (!token) {
+        return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+
+    res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    res.json({ message: 'Login exitoso', user: username });
+});
+
+app.post('/api/logout', (req, res) => {
+    const cookies = {};
+    if (req.headers.cookie) {
+        req.headers.cookie.split(';').forEach(pair => {
+            const [key, ...rest] = pair.split('=');
+            cookies[key.trim()] = rest.join('=').trim();
+        });
+    }
+    logout(cookies['session_token']);
+    res.setHeader('Set-Cookie', 'session_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+    res.json({ message: 'Logout exitoso' });
+});
+
+app.get('/api/auth/check', (req, res) => {
+    const cookies = {};
+    if (req.headers.cookie) {
+        req.headers.cookie.split(';').forEach(pair => {
+            const [key, ...rest] = pair.split('=');
+            cookies[key.trim()] = rest.join('=').trim();
+        });
+    }
+    const user = getUser(cookies['session_token']);
+    if (!user) {
+        return res.status(401).json({ error: 'No autenticado' });
+    }
+    res.json({ user: user.username, payer: user.payer });
+});
+
+// Auth middleware + rate limit para el resto de la API
+app.use('/api', apiLimiter);
+app.use('/api', authMiddleware);
 
 app.get('/api/expenses', (req, res) => {
     db.all('SELECT * FROM expenses ORDER BY date DESC', [], (err, rows) => {
@@ -32,9 +93,7 @@ app.get('/api/expenses', (req, res) => {
                 else if (row.payer === 'partner') totalPartner += row.amount;
             });
             const difference = totalMe - totalPartner;
-            // If balance is positive, the partner owes me (difference / 2)
-            // Since it's a two-person app, we calculate how much one person must pay the other to equalize.
-            
+
             res.json({
                 expenses: rows,
                 summary: {
@@ -48,15 +107,29 @@ app.get('/api/expenses', (req, res) => {
     });
 });
 
-// Ruta para añadir un nuevo gasto
 app.post('/api/expense', (req, res) => {
     const { date, description, amount, payer, category } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
 
+    const validPayers = ['me', 'partner'];
+    const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.warn(`[VALIDACIÓN] Intento de ingreso con monto inválido: ${amount}`);
+        console.warn(`[VALIDACIÓN] Monto inválido recibido`);
         return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+    }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida' });
+    }
+    if (!validPayers.includes(payer)) {
+        return res.status(400).json({ error: 'Pagador inválido' });
+    }
+    if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Categoría inválida' });
+    }
+    if (cleanDescription.length > 500) {
+        return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
     }
 
     const query = `INSERT INTO expenses (date, description, amount, payer, category) VALUES (?, ?, ?, ?, ?)`;

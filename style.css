@@ -524,3 +524,43 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+.login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.login-card {
+    background: var(--card-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.login-card h1 {
+    font-size: 1.4rem;
+    margin-bottom: 24px;
+}
+
+.login-card label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.login-card .form-select,
+.login-card .form-control {
+    margin-bottom: 16px;
+}
+
+.user-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-right: 8px;
+}

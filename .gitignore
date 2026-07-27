@@ -2,6 +2,9 @@
 node_modules/
 jspm_packages/
 
+# Database
+server/database.sqlite
+
 # Build outputs
 dist/
 build/
