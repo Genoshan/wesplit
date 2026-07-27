@@ -24,7 +24,7 @@ node server/index.js &
 NEW_PID=$!
 echo $NEW_PID > "$PID_FILE"
 
-# Bucle para esperar a que el puerto 3000 esté activo
+# Bucle para esperar a que el puerto 4000 esté activo
 while ! ss -tlnp | grep -q ":4000"; do
     sleep 1
 done

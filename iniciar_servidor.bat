@@ -2,10 +2,10 @@
 title Iniciar Servidor de Datos - Reloj
 
 :: Limpieza de puerto previo (Equivalente al manejo de PID en .sh)
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :4000') do taskkill /f /pid %%a >nul 2>&1
 timeout /t 2 >nul
 
-echo Iniciando el servidor en el puerto 3000...
+echo Iniciando el servidor en el puerto 4000...
 echo (Se abrira una nueva ventana para los logs del servidor)
 
 
@@ -13,10 +13,10 @@ echo (Se abrira una nueva ventana para los logs del servidor)
 start "" node server\index.js
 
 :wait_port
-netstat -ano | findstr :3000 >nul
+netstat -ano | findstr :4000 >nul
 if %errorlevel% == 0 (
-    echo Puerto 3000 detectado. Abriendo navegador...
-    start "" "http://localhost:3000"
+    echo Puerto 4000 detectado. Abriendo navegador...
+    start "" "http://localhost:4000"
     goto end
 )
 
