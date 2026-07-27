@@ -1,9 +1,10 @@
 {
   "dependencies": {
+    "@libsql/client": "^0.14.0",
     "body-parser": "^2.3.0",
+    "dotenv": "^16.4.7",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.1",
-    "helmet": "^8.3.0",
-    "sqlite3": "^6.0.1"
+    "helmet": "^8.3.0"
   }
 }

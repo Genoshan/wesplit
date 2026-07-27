@@ -8,6 +8,8 @@ const { authMiddleware, login, logout, getUser } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const COOKIE_FLAGS = `HttpOnly; SameSite=Strict; Path=/${IS_PRODUCTION ? '; Secure' : ''}`;
 
 // Security
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -44,7 +46,7 @@ app.post('/api/login', (req, res) => {
         return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    res.setHeader('Set-Cookie', `session_token=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    res.setHeader('Set-Cookie', `session_token=${token}; ${COOKIE_FLAGS}`);
     res.json({ message: 'Login exitoso', user: username });
 });
 
@@ -57,7 +59,7 @@ app.post('/api/logout', (req, res) => {
         });
     }
     logout(cookies['session_token']);
-    res.setHeader('Set-Cookie', 'session_token=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+    res.setHeader('Set-Cookie', `session_token=; ${COOKIE_FLAGS}; Max-Age=0`);
     res.json({ message: 'Logout exitoso' });
 });
 
@@ -80,34 +82,34 @@ app.get('/api/auth/check', (req, res) => {
 app.use('/api', apiLimiter);
 app.use('/api', authMiddleware);
 
-app.get('/api/expenses', (req, res) => {
-    db.all('SELECT * FROM expenses ORDER BY date DESC', [], (err, rows) => {
-        if (err) {
-            console.error(`[ERROR_QUERY] Fallo al obtener gastos: ${err}`);
-            res.status(500).json({ error: 'Error interno en la base de datos' });
-        } else {
-            let totalMe = 0;
-            let totalPartner = 0;
-            rows.forEach(row => {
-                if (row.payer === 'me') totalMe += row.amount;
-                else if (row.payer === 'partner') totalPartner += row.amount;
-            });
-            const difference = totalMe - totalPartner;
+app.get('/api/expenses', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
+        const rows = result.rows;
+        let totalMe = 0;
+        let totalPartner = 0;
+        rows.forEach(row => {
+            if (row.payer === 'me') totalMe += row.amount;
+            else if (row.payer === 'partner') totalPartner += row.amount;
+        });
+        const difference = totalMe - totalPartner;
 
-            res.json({
-                expenses: rows,
-                summary: {
-                    totalMe: totalMe,
-                    totalPartner: totalPartner,
-                    balance: difference > 0 ? (difference / 2).toFixed(2) : (Math.abs(difference) / 2).toFixed(2),
-                    status: difference > 0 ? "Te deben" : "Le debes"
-                }
-            });
-        }
-    });
+        res.json({
+            expenses: rows,
+            summary: {
+                totalMe: totalMe,
+                totalPartner: totalPartner,
+                balance: difference > 0 ? (difference / 2).toFixed(2) : (Math.abs(difference) / 2).toFixed(2),
+                status: difference > 0 ? "Te deben" : "Le debes"
+            }
+        });
+    } catch (err) {
+        console.error(`[ERROR_QUERY] Fallo al obtener gastos: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
 });
 
-app.post('/api/expense', (req, res) => {
+app.post('/api/expense', async (req, res) => {
     const { date, description, amount, payer, category } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
@@ -132,16 +134,17 @@ app.post('/api/expense', (req, res) => {
         return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
     }
 
-    const query = `INSERT INTO expenses (date, description, amount, payer, category) VALUES (?, ?, ?, ?, ?)`;
-    db.run(query, [date, cleanDescription, parsedAmount, payer, category], function(err) {
-        if (err) {
-            console.error(`[ERROR_DB] Fallo al insertar en la base de datos: ${err}`);
-            res.status(500).json({ error: 'Error interno en la base de datos' });
-        } else {
-            console.log(`[ÉXITO] Gasto registrado: ${cleanDescription} - $${parsedAmount}`);
-            res.json({ id: this.lastID, message: 'Gasto registrado con éxito' });
-        }
-    });
+    try {
+        const result = await db.execute({
+            sql: 'INSERT INTO expenses (date, description, amount, payer, category) VALUES (?, ?, ?, ?, ?)',
+            args: [date, cleanDescription, parsedAmount, payer, category],
+        });
+        console.log(`[ÉXITO] Gasto registrado: ${cleanDescription} - $${parsedAmount}`);
+        res.json({ id: Number(result.lastInsertRowid), message: 'Gasto registrado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al insertar en la base de datos: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
 });
 
 app.listen(PORT, () => {

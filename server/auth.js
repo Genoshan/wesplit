@@ -1,9 +1,18 @@
 const crypto = require('crypto');
 
+const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 horas
+
 const USERS = {
-    tin: { password: process.env.AUTH_TIN || 'tin123', payer: 'me' },
-    noe: { password: process.env.AUTH_NOE || 'noe123', payer: 'partner' }
+    tin: { password: process.env.AUTH_TIN, payer: 'me' },
+    noe: { password: process.env.AUTH_NOE, payer: 'partner' }
 };
+
+// Validar que las contraseñas estén configuradas
+Object.entries(USERS).forEach(([name, user]) => {
+    if (!user.password) {
+        console.error(`[AUTH] Falta AUTH_${name.toUpperCase()} en variables de entorno`);
+    }
+});
 
 const sessions = new Map();
 
@@ -21,9 +30,16 @@ function parseCookies(header) {
     return cookies;
 }
 
-function authMiddleware(req, res, next) {
-    if (req.path === '/api/login') return next();
+function cleanExpiredSessions() {
+    const now = Date.now();
+    for (const [token, session] of sessions) {
+        if (now - session.createdAt > SESSION_TTL) {
+            sessions.delete(token);
+        }
+    }
+}
 
+function authMiddleware(req, res, next) {
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies['session_token'];
 
@@ -31,16 +47,24 @@ function authMiddleware(req, res, next) {
         return res.status(401).json({ error: 'No autenticado' });
     }
 
-    req.user = sessions.get(token);
+    const session = sessions.get(token);
+    if (Date.now() - session.createdAt > SESSION_TTL) {
+        sessions.delete(token);
+        return res.status(401).json({ error: 'Sesión expirada' });
+    }
+
+    req.user = { username: session.username, payer: session.payer };
     next();
 }
 
 function login(username, password) {
     const user = USERS[username];
-    if (!user || user.password !== password) return null;
+    if (!user || !user.password || user.password !== password) return null;
+
+    cleanExpiredSessions();
 
     const token = generateToken();
-    sessions.set(token, { username, payer: user.payer });
+    sessions.set(token, { username, payer: user.payer, createdAt: Date.now() });
     return token;
 }
 
@@ -49,7 +73,13 @@ function logout(token) {
 }
 
 function getUser(token) {
-    return sessions.get(token) || null;
+    const session = sessions.get(token);
+    if (!session) return null;
+    if (Date.now() - session.createdAt > SESSION_TTL) {
+        sessions.delete(token);
+        return null;
+    }
+    return { username: session.username, payer: session.payer };
 }
 
 module.exports = { authMiddleware, login, logout, getUser };
