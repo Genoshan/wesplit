@@ -7,7 +7,8 @@ let feedbackTimeout = null;
 let historyFilters = {
     search: '',
     category: '',
-    payer: ''
+    payer: '',
+    month: ''
 };
 
 document.documentElement.setAttribute('data-theme', localStorage.getItem(themeKey) || defaultTheme);
@@ -344,8 +345,9 @@ function applyHistoryFilters() {
 
         const matchesCategory = !historyFilters.category || categoryName(item.category) === historyFilters.category;
         const matchesPayer = !historyFilters.payer || item.payer === historyFilters.payer;
+        const matchesMonth = !historyFilters.month || (item.date && item.date.startsWith(historyFilters.month));
 
-        return matchesSearch && matchesCategory && matchesPayer;
+        return matchesSearch && matchesCategory && matchesPayer && matchesMonth;
     });
 
     renderHistory(filteredExpenses);
@@ -366,19 +368,44 @@ function setPayerFilter(payer) {
     applyHistoryFilters();
 }
 
+function setMonthFilter(month) {
+    historyFilters.month = month;
+    applyHistoryFilters();
+}
+
 function hydrateHistoryFilterOptions() {
     const categoryFilter = document.getElementById('category-filter');
-    if (!categoryFilter) return;
+    const monthFilter = document.getElementById('month-filter');
 
-    const categories = Array.from(new Set(allExpenses.map(item => categoryName(item.category)))).sort();
-    const selectedCategory = categoryFilter.value;
+    if (categoryFilter) {
+        const categories = Array.from(new Set(allExpenses.map(item => categoryName(item.category)))).sort();
+        const selectedCategory = categoryFilter.value;
 
-    categoryFilter.innerHTML = '<option value="">Todas las categorías</option>' + categories.map(category => {
-        return `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`;
-    }).join('');
+        categoryFilter.innerHTML = '<option value="">Todas las categorías</option>' + categories.map(category => {
+            return `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`;
+        }).join('');
 
-    categoryFilter.value = categories.includes(selectedCategory) ? selectedCategory : '';
-    historyFilters.category = categoryFilter.value;
+        categoryFilter.value = categories.includes(selectedCategory) ? selectedCategory : '';
+        historyFilters.category = categoryFilter.value;
+    }
+
+    if (monthFilter) {
+        const months = Array.from(new Set(allExpenses
+            .filter(item => item.date)
+            .map(item => item.date.substring(0, 7))
+        )).sort().reverse();
+
+        const selectedMonth = monthFilter.value;
+
+        monthFilter.innerHTML = '<option value="">Todos los meses</option>' + months.map(month => {
+            const [year, m] = month.split('-');
+            const label = new Date(year, parseInt(m) - 1).toLocaleDateString('es-UY', { year: 'numeric', month: 'long' });
+            return `<option value="${month}">${label}</option>`;
+        }).join('');
+
+        monthFilter.value = months.includes(selectedMonth) ? selectedMonth : '';
+        historyFilters.month = monthFilter.value;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -412,6 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (payerFilter) {
         payerFilter.addEventListener('change', event => {
             setPayerFilter(event.target.value);
+        });
+    }
+
+    const monthFilter = document.getElementById('month-filter');
+    if (monthFilter) {
+        monthFilter.addEventListener('change', event => {
+            setMonthFilter(event.target.value);
         });
     }
 
