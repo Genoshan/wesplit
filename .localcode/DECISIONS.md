@@ -5,4 +5,5 @@
 - [2026-07-16] | **Storage Strategy** | Selected plain-text files in a .localcode/ directory for human readability and Git compatibility.
 - [2026-07-16] | **Protocolo de Contexto** | Se establece el uso estricto del sistema .localcode como la fuente primaria de verdad para evitar la degradación por falta de contexto (context drift). El agente no debe adivinar; debe usar las herramientas y los archivos en .localcode (SESSION, DECISIONS) para mantener la coherencia entre sesiones.
 - [2026-07-29] | **Fuente de verdad** | Siempre verificar estado remoto con `gh pr list` antes de confiar en archivos locales. Nunca asumir estado del repositorio sin verificar en GitHub.
+- [2026-07-30] | **Rama obligatoria** | Antes de implementar cualquier cambio, crear rama `feature/<nombre>`. Nunca modificar `main` directamente. Regla agregada a AGENTS.md.
 - [2026-07-30] | **Auditoría de roadmap** | El roadmap en raíz estaba desactualizado — Fase 1 completa pero marcada como 1/4. Se actualizó reflejando el estado real del proyecto con 9 features implementadas en Fase 1.

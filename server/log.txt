@@ -1,0 +1,8 @@
+Servidor corriendo en http://localhost:4000
+[DB] Tabla expenses inicializada en Turso
+[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] AUTH_TIN="tin123"
+[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] AUTH_TIN="tin123"
+[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] AUTH_TIN="tin123"

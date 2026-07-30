@@ -418,6 +418,24 @@ async function checkAuth() {
         currentUser = null;
         document.getElementById('login-screen').hidden = false;
         document.getElementById('app-main').hidden = true;
+        checkGoogleAuthAvailability();
+    }
+}
+
+async function checkGoogleAuthAvailability() {
+    try {
+        const res = await fetch('/api/google/init', { method: 'POST' });
+        const googleSection = document.getElementById('google-login-section');
+        if (res.ok && googleSection) {
+            googleSection.hidden = false;
+        } else if (googleSection) {
+            googleSection.hidden = true;
+        }
+    } catch (err) {
+        const googleSection = document.getElementById('google-login-section');
+        if (googleSection) {
+            googleSection.hidden = true;
+        }
     }
 }
 
@@ -454,6 +472,51 @@ async function logoutUser() {
     currentUser = null;
     document.getElementById('login-screen').hidden = true;
     document.getElementById('app-main').hidden = true;
+}
+
+async function handleGoogleCallbackRedirect(code, state) {
+    try {
+        const res = await fetch(`/api/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error en el callback de Google');
+        }
+        const data = await res.json();
+        currentUser = data;
+        document.getElementById('login-screen').hidden = true;
+        document.getElementById('app-main').hidden = false;
+        document.getElementById('user-label').textContent = data.user === 'tin' ? 'Tin' : 'Noe';
+        const payerSelect = document.getElementById('expensePayer');
+        if (payerSelect) payerSelect.value = data.payer;
+        
+        // Limpiar URL de params
+        const url = new URL(window.location);
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+        
+        initApp();
+    } catch (err) {
+        console.error('[GOOGLE CALLBACK] Error:', err);
+        currentUser = null;
+        document.getElementById('login-screen').hidden = false;
+        document.getElementById('app-main').hidden = true;
+        Swal.fire('Error', err.message || 'No se pudo completar el login con Google.', 'error');
+    }
+}
+
+async function loginWithGoogle() {
+    try {
+        const res = await fetch('/api/google/init', { method: 'POST' });
+        if (!res.ok) {
+            throw new Error('No se pudo iniciar sesion con Google');
+        }
+        const data = await res.json();
+        window.location.href = data.redirectUrl;
+    } catch (err) {
+        console.error('[GOOGLE LOGIN] Error:', err);
+        Swal.fire('Error', 'No se pudo iniciar sesion con Google. Verifica la configuracion.', 'error');
+    }
 }
 
 let editModalInstance = null;
@@ -649,6 +712,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const googleLoginBtn = document.getElementById('google-login-btn');
+    if (googleLoginBtn) {
+        googleLoginBtn.addEventListener('click', loginWithGoogle);
+    }
+
+    // Check if we're coming from Google OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('code') && urlParams.get('state')) {
+        handleGoogleCallbackRedirect(urlParams.get('code'), urlParams.get('state'));
+        return;
+    }
+
     const editForm = document.getElementById('edit-form');
     if (editForm) {
         editForm.addEventListener('submit', event => {
@@ -677,3 +752,4 @@ window.submitExpense = submitExpense;
 window.logoutUser = logoutUser;
 window.editExpense = editExpense;
 window.deleteExpense = deleteExpense;
+window.loginWithGoogle = loginWithGoogle;

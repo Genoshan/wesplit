@@ -564,3 +564,72 @@ body {
     font-size: 0.85rem;
     margin-right: 8px;
 }
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    margin: 20px 0 16px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.login-divider::before {
+    margin-right: 12px;
+}
+
+.login-divider::after {
+    margin-left: 12px;
+}
+
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 44px;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 0 24px;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.btn-google:hover {
+    background-color: #f8f9fa;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.btn-google:active {
+    background-color: #f1f3f4;
+}
+
+.google-icon {
+    display: flex;
+    align-items: center;
+}
+
+[data-bs-theme="dracula"] .btn-google,
+[data-bs-theme="nord"] .btn-google {
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+[data-bs-theme="dracula"] .btn-google:hover,
+[data-bs-theme="nord"] .btn-google:hover {
+    background-color: var(--soft-panel);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}

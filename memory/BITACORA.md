@@ -182,3 +182,27 @@ Cada entrada debe seguir este formato:
 ### Notas para próxima sesión
 - Server corriendo en puerto 4000 (PID 22180)
 - Considerar agregar el hash SRI correcto de bootstrap.bundle.min.js
+- Crear PR #11 para mergear `feature/expense-crud` a main
+
+---
+
+## [2026-07-30] Commit y push de fix login + edit/delete expenses
+
+### Contexto
+- Sesión anterior resolvió problema de login y agregó features de edición/eliminación
+- Necesidad de guardar el estado antes de continuar
+
+### Cambios realizados
+- **Git commit** `70f22e1` en `feature/expense-crud`:
+  - Fix: Dashboard now renders after login (Bootstrap JS bundle added)
+  - Feature: Edit/delete expenses via PUT/DELETE endpoints
+  - Feature: Edit modal with form
+  - Clean up debug logs
+- **Git push** a `origin/feature/expense-crud`
+- **Actualizado** `.localcode/SESSION.md` con estado actualizado
+- **Actualizada** `memory/BITACORA.md` con checkpoint
+
+### Estado final
+- Todos los cambios commiteados y pusheados
+- Rama lista para PR: `feature/expense-crud`
+- Main en `198b751` (Turso migration + security hardening)
