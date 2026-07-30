@@ -1,4 +1,14 @@
 {
+  "name": "wesplit-server",
+  "version": "1.0.0",
+  "description": "Backend for WeSplit - expense sharing app",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "echo \"No tests yet\" && exit 0",
+    "lint": "eslint ."
+  },
   "dependencies": {
     "@libsql/client": "^0.14.0",
     "body-parser": "^2.3.0",
