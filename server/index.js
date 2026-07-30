@@ -144,6 +144,109 @@ app.post('/api/google/logout', apiLimiter, (req, res) => {
     res.json({ message: 'Logout exitoso' });
 });
 
+app.get('/api/recurring', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM recurring_expenses ORDER BY next_due_date ASC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al obtener gastos recurrentes: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.post('/api/recurring', async (req, res) => {
+    const { description, amount, payer, category, frequency, next_due_date } = req.body;
+    const cleanDescription = description ? description.trim() : '';
+    const parsedAmount = parseFloat(amount);
+
+    if (!cleanDescription || cleanDescription.length === 0) {
+        return res.status(400).json({ error: 'La descripción es requerida' });
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+    }
+    if (!['me', 'partner'].includes(payer)) {
+        return res.status(400).json({ error: 'Pagador inválido' });
+    }
+    if (!['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'].includes(category)) {
+        return res.status(400).json({ error: 'Categoría inválida' });
+    }
+    if (!['diario', 'semanal', 'quincenal', 'mensual', 'trimestral', 'anual'].includes(frequency)) {
+        return res.status(400).json({ error: 'Frecuencia inválida' });
+    }
+    if (!next_due_date || !/^\d{4}-\d{2}-\d{2}$/.test(next_due_date)) {
+        return res.status(400).json({ error: 'Fecha inválida' });
+    }
+
+    try {
+        const result = await db.execute({
+            sql: 'INSERT INTO recurring_expenses (description, amount, payer, category, frequency, next_due_date) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [cleanDescription, parsedAmount, payer, category, frequency, next_due_date],
+        });
+        console.log(`[ÉXITO] Recurrente creado: ${cleanDescription} - $${parsedAmount}`);
+        res.json({ id: Number(result.lastInsertRowid), message: 'Gasto recurrente creado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al insertar gasto recurrente: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.delete('/api/recurring/:id', async (req, res) => {
+    try {
+        const result = await db.execute('DELETE FROM recurring_expenses WHERE id = ?', [req.params.id]);
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Gasto recurrente no encontrado' });
+        }
+        console.log(`[ÉXITO] Recurrente eliminado: ${req.params.id}`);
+        res.json({ message: 'Gasto recurrente eliminado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al eliminar gasto recurrente: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.put('/api/recurring/:id', async (req, res) => {
+    const { description, amount, payer, category, frequency, next_due_date } = req.body;
+    const cleanDescription = description ? description.trim() : '';
+    const parsedAmount = parseFloat(amount);
+
+    if (!cleanDescription || cleanDescription.length === 0) {
+        return res.status(400).json({ error: 'La descripción es requerida' });
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+    }
+    if (!['me', 'partner'].includes(payer)) {
+        return res.status(400).json({ error: 'Pagador inválido' });
+    }
+    if (!['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'].includes(category)) {
+        return res.status(400).json({ error: 'Categoría inválida' });
+    }
+    if (!['diario', 'semanal', 'quincenal', 'mensual', 'trimestral', 'anual'].includes(frequency)) {
+        return res.status(400).json({ error: 'Frecuencia inválida' });
+    }
+    if (!next_due_date || !/^\d{4}-\d{2}-\d{2}$/.test(next_due_date)) {
+        return res.status(400).json({ error: 'Fecha inválida' });
+    }
+
+    try {
+        const existing = await db.execute('SELECT * FROM recurring_expenses WHERE id = ?', [req.params.id]);
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ error: 'Gasto recurrente no encontrado' });
+        }
+
+        await db.execute(
+            'UPDATE recurring_expenses SET description = ?, amount = ?, payer = ?, category = ?, frequency = ?, next_due_date = ? WHERE id = ?',
+            [cleanDescription, parsedAmount, payer, category, frequency, next_due_date, req.params.id]
+        );
+        console.log(`[ÉXITO] Recurrente actualizado: ${req.params.id} - ${cleanDescription}`);
+        res.json({ message: 'Gasto recurrente actualizado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al actualizar gasto recurrente: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
 app.get('/api/auth/check', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');

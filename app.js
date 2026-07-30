@@ -658,6 +658,7 @@ function initApp() {
         editModalInstance = new bootstrap.Modal(editModal);
     }
     fetchHistory();
+    loadRecurring();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -753,3 +754,177 @@ window.logoutUser = logoutUser;
 window.editExpense = editExpense;
 window.deleteExpense = deleteExpense;
 window.loginWithGoogle = loginWithGoogle;
+
+/* Recurring Expenses */
+let recurringCache = [];
+
+function getFreqLabel(freq) {
+    const map = {
+        'diario': 'Diario',
+        'semanal': 'Semanal',
+        'quincenal': 'Quincenal',
+        'mensual': 'Mensual',
+        'trimestral': 'Trimestral',
+        'anual': 'Anual'
+    };
+    return map[freq] || freq;
+}
+
+function renderRecurring(list) {
+    const container = document.getElementById('recurring-list');
+    if (!container) return;
+    recurringCache = list || [];
+
+    if (list.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted empty-state">No hay gastos recurrentes configurados</p>';
+        return;
+    }
+
+    container.innerHTML = list.map(item => `
+        <div class="recurring-item" data-id="${item.id}">
+            <div class="recurring-info">
+                <p class="recurring-description">${escapeHtml(item.description)}</p>
+                <div class="recurring-meta">
+                    <span class="recurring-freq-badge">${getFreqLabel(item.frequency)}</span>
+                    <span>${escapeHtml(formatDate(item.next_due_date))}</span>
+                    <span>${escapeHtml(categoryName(item.category))}</span>
+                </div>
+            </div>
+            <div class="recurring-actions">
+                <span class="recurring-amount">${formatCurrency(item.amount)}</span>
+                <button class="btn btn-primary btn-recurring-add" title="Agregar este gasto al historial">
+                    Agregar
+                </button>
+                <button class="btn btn-recurring-delete" title="Eliminar">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    `).join('');
+
+    container.querySelectorAll('.recurring-item').forEach(row => {
+        const id = parseInt(row.dataset.id, 10);
+        row.querySelector('.btn-recurring-add').addEventListener('click', () => addRecurringExpense(id));
+        row.querySelector('.btn-recurring-delete').addEventListener('click', () => deleteRecurringExpense(id));
+    });
+}
+
+async function loadRecurring() {
+    try {
+        const res = await fetch('/api/recurring');
+        if (!res.ok) throw new Error('Error en la red');
+        const data = await res.json();
+        renderRecurring(data);
+    } catch (err) {
+        console.error('[RECURRING] Error al cargar:', err);
+    }
+}
+
+async function addRecurringExpense(id) {
+    const item = recurringCache.find(i => Number(i.id) === Number(id));
+    if (!item) {
+        Swal.fire('Error', 'Gasto recurrente no encontrado.', 'error');
+        return;
+    }
+
+    try {
+        await fetch('/api/expense', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                amount: item.amount,
+                description: item.description,
+                category: item.category,
+                payer: item.payer,
+                date: new Date().toISOString().split('T')[0]
+            })
+        });
+
+        await fetch(`/api/recurring/${item.id}`, {
+            method: 'DELETE'
+        });
+
+        Swal.fire('¡Listo!', `Se agregó "${item.description}" al historial.`, 'success');
+        await fetchHistory();
+        await loadRecurring();
+    } catch (err) {
+        console.error('[RECURRING] Error:', err);
+        Swal.fire('Error', 'No se pudo agregar el gasto recurrente.', 'error');
+    }
+}
+
+async function deleteRecurringExpense(id) {
+    const result = await Swal.fire({
+        title: '¿Eliminar gasto recurrente?',
+        text: 'Se eliminará de la lista de recurrentes.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        const res = await fetch(`/api/recurring/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!res.ok) throw new Error('Error al eliminar');
+
+        Swal.fire('¡Eliminado!', 'Gasto recurrente eliminado.', 'success');
+        await loadRecurring();
+    } catch (err) {
+        console.error('[RECURRING] Error al eliminar:', err);
+        Swal.fire('Error', 'No se pudo eliminar el gasto recurrente.', 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const recurringForm = document.getElementById('recurring-form');
+    if (recurringForm) {
+        recurringForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const description = document.getElementById('recurringDescription').value;
+            const amount = document.getElementById('recurringAmount').value;
+            const category = document.getElementById('recurringCategory').value;
+            const payer = document.getElementById('recurringPayer').value;
+            const frequency = document.getElementById('recurringFrequency').value;
+            const nextDueDate = document.getElementById('recurringDueDate').value;
+
+            if (!description || !amount || !nextDueDate) {
+                Swal.fire('Atención', 'Completa todos los campos obligatorios.', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/recurring', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        description,
+                        amount: parseFloat(amount),
+                        payer,
+                        category,
+                        frequency,
+                        next_due_date: nextDueDate
+                    })
+                });
+
+                if (!res.ok) {
+                    const error = await res.json().catch(() => ({}));
+                    throw new Error(error.error || 'Error en el servidor');
+                }
+
+                Swal.fire('¡Listo!', 'Gasto recurrente creado.', 'success');
+                recurringForm.reset();
+                bootstrap.Modal.getInstance(document.getElementById('recurringModal')).hide();
+                await loadRecurring();
+            } catch (err) {
+                console.error('[RECURRING] Error al crear:', err);
+                Swal.fire('Error', err.message || 'No se pudo crear el gasto recurrente.', 'error');
+            }
+        });
+    }
+});
