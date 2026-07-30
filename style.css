@@ -105,6 +105,11 @@ html,
 body {
     min-height: 100%;
     margin: 0;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+html {
+    -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -525,6 +530,30 @@ body {
     }
 }
 
+@media (max-width: 480px) {
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 360px) {
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #history-table th:nth-child(5),
+    #history-table td:nth-child(5) {
+        display: none !important;
+    }
+}
+
+@media (max-width: 320px) {
+    #history-table th:nth-child(3),
+    #history-table td:nth-child(3) {
+        display: none !important;
+    }
+}
+
 .login-screen {
     display: flex;
     justify-content: center;
@@ -632,4 +661,172 @@ body {
 [data-bs-theme="nord"] .btn-google:hover {
     background-color: var(--soft-panel);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 560px) {
+    .app-shell {
+        width: calc(100% - 20px);
+        padding: 16px 0;
+    }
+
+    .app-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .header-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .theme-select {
+        min-width: unset;
+    }
+
+    .balance-panel {
+        grid-template-columns: 1fr;
+        padding: 20px;
+        gap: 16px;
+    }
+
+    .balance-amount {
+        min-width: unset;
+        width: 100%;
+        margin-top: 0;
+        text-align: left;
+    }
+
+    .metric-card {
+        padding: 14px;
+    }
+
+    .card-body {
+        padding: 1rem !important;
+    }
+
+    .form-control,
+    .form-select {
+        font-size: 16px !important;
+    }
+
+    .category-pill,
+    .payer-pill {
+        font-size: 0.75rem;
+        padding: 2px 6px;
+    }
+
+    #history-table th {
+        padding: 10px 6px;
+        font-size: 0.7rem;
+    }
+
+    #history-table td {
+        padding: 10px 6px !important;
+    }
+
+    .chart-area {
+        min-height: 200px;
+    }
+
+    #categoryChart {
+        height: 200px !important;
+    }
+
+    .chart-summary {
+        max-width: 100%;
+    }
+
+    .login-card {
+        padding: 24px 20px;
+        max-width: 100%;
+    }
+
+    .login-card h1 {
+        font-size: 1.2rem;
+    }
+
+    .user-label {
+        font-size: 0.8rem;
+    }
+
+    .eyebrow {
+        font-size: 0.82rem;
+    }
+
+    .btn-google {
+        font-size: 0.88rem;
+        padding: 0 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-dialog {
+        max-width: 100% !important;
+        margin: 0 !important;
+    }
+
+    .modal-content {
+        border-radius: 0 !important;
+        min-height: 100vh !important;
+    }
+
+    .modal-header {
+        border-radius: 0 !important;
+    }
+
+    .modal-footer {
+        border-radius: 0 !important;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px !important;
+    }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .app-shell {
+        padding: 8px 0;
+    }
+
+    .balance-panel {
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .chart-area {
+        min-height: 180px;
+    }
+
+    #categoryChart {
+        height: 180px !important;
+    }
+
+    .summary-grid {
+        margin-bottom: 16px;
+    }
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+select,
+input,
+a {
+    touch-action: manipulation;
+}
+
+body {
+    overscroll-behavior: none;
+}
+
+@media (prefers-color-scheme: light) {
+    @media (max-width: 767px) {
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+    }
 }
