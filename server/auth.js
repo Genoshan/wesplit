@@ -184,8 +184,8 @@ function mapEmailToUser(email) {
     }
 
     const emailMap = {
-        'tin@wesplit.local': { username: 'tin', payer: 'me' },
-        'noe@wesplit.local': { username: 'noe', payer: 'partner' }
+        'argordster@gmail.com': { username: 'tin', payer: 'me' },
+        'mnovoapacilio@gmail.com': { username: 'noe', payer: 'partner' }
     };
 
     return emailMap[email.toLowerCase()] || null;
