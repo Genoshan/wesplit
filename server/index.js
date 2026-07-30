@@ -118,7 +118,7 @@ app.get('/api/google/callback', apiLimiter, async (req, res) => {
             path: '/',
             secure: IS_PRODUCTION
         });
-        res.json({ message: 'Login exitoso', user: result.user, payer: result.payer });
+        res.redirect('/');
     } catch (err) {
         console.error('[GOOGLE CALLBACK] Error:', err);
         res.status(500).json({ error: 'Error al completar el login con Google' });
