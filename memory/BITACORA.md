@@ -206,3 +206,43 @@ Cada entrada debe seguir este formato:
 - Todos los cambios commiteados y pusheados
 - Rama lista para PR: `feature/expense-crud`
 - Main en `198b751` (Turso migration + security hardening)
+
+---
+
+## [2026-07-30] Mobile-first responsive audit + fixes
+
+### Contexto
+- Usuario solicita auditoría mobile-first de la app
+- La app tiene 11 media queries existentes pero múltiples problemas en pantallas < 480px
+
+### Cambios realizados
+- **Rama**: `feature/mobile-responsiveness` (creada, sin push aún)
+- **style.css**: 
+  - Chart height reducido: 320px → 200px en mobile (C2)
+  - App-shell padding: 32px → 16px en mobile (C3)
+  - Balance panel: `min-width: 210px` removido en mobile (H1)
+  - Form inputs: `font-size: 16px` explícito para evitar iOS zoom (H4)
+  - Card body padding: `p-4` → `1rem` en mobile (M3)
+  - Summary grid: breakpoints intermedios 480px (2 cols) y 360px (1 col) (H2)
+  - Filters: 1 columna forzada a 560px (H3)
+  - Pills y tabla: padding reducido en mobile (M4)
+  - Modal: fullscreen en < 480px (M5)
+  - Header actions: flex-wrap en mobile (M1)
+  - Chart summary: `max-width: 100%` en mobile (M7)
+  - Touch optimization: `touch-action: manipulation`, `-webkit-tap-highlight-color: transparent` (L3)
+  - Safe area: `env(safe-area-inset-*)` para iPhone notch (L5)
+  - Landscape: media query para `max-height: 500px` (L4)
+  - Tabla: columnas ocultas progresivamente < 360px (Pagador) y < 320px (Categoría) (C1)
+  - Eyebrow: `font-size: 0.82rem` en mobile (L1)
+  - Login card: padding y font-size reducidos en mobile
+
+### Decisiones tomadas
+- Prioridad: fixes de 1 línea primero (chart, balance, shell, font-size)
+- Columnas de tabla se ocultan progresivamente (no abruptamente)
+- Modal fullscreen en mobile para mejor UX de edición
+
+### Estado final
+- 20 issues de auditoría identificados y solucionados
+- 4 nuevas media queries agregadas: 560px, 480px, 360px, landscape
+- Touch optimization y safe area para iOS moderno
+- Rama lista para PR: `feature/mobile-responsiveness`
