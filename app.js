@@ -507,7 +507,11 @@ async function handleGoogleCallbackRedirect(code, state) {
 
 async function loginWithGoogle() {
     try {
-        const res = await fetch('/api/google/init', { method: 'POST' });
+        const res = await fetch('/api/google/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ origin: window.location.origin })
+        });
         if (!res.ok) {
             throw new Error('No se pudo iniciar sesion con Google');
         }

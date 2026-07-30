@@ -151,9 +151,12 @@ function exchangeCodeForToken(code, redirectUri) {
     });
 }
 
-function getGoogleRedirectUri(req) {
+function getGoogleRedirectUri(req, clientOrigin) {
     if (process.env.GOOGLE_REDIRECT_URI) {
         return process.env.GOOGLE_REDIRECT_URI;
+    }
+    if (clientOrigin) {
+        return `${clientOrigin}/api/google/callback`;
     }
     const port = process.env.PORT || 4000;
     let host;
@@ -200,7 +203,7 @@ function mapEmailToUser(email) {
     return emailMap[email.toLowerCase()] || null;
 }
 
-function initGoogleAuth(req) {
+function initGoogleAuth(req, clientOrigin) {
     if (!process.env.GOOGLE_CLIENT_ID) {
         console.error('[AUTH] Falta GOOGLE_CLIENT_ID en variables de entorno');
         return null;
@@ -213,7 +216,7 @@ function initGoogleAuth(req) {
 
     cleanGoogleSessions();
     const state = crypto.randomBytes(32).toString('hex');
-    const redirectUri = getGoogleRedirectUri(req);
+    const redirectUri = getGoogleRedirectUri(req, clientOrigin);
     const authUrl = buildGoogleAuthUrl(process.env.GOOGLE_CLIENT_ID, redirectUri, state);
     googleSessions.set(state, { redirectUri, createdAt: Date.now() });
     return { authUrl, state };
