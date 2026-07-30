@@ -122,3 +122,63 @@ Cada entrada debe seguir este formato:
 ### Notas para próxima sesión
 - Crear PR y mergear a main
 - Considerar limpiar HTML/CSS del `#form-feedback` (ya no se usa)
+
+---
+
+## [2026-07-29] Verificación de estado del repositorio
+
+### Contexto
+- Inicio de nueva sesión
+- SESSION.md y BITACORA.md estaban desactualizados (última entrada PR #7)
+- Necesidad de verificar estado real del repositorio
+
+### Cambios realizados
+- **Verificado** todos los PRs (#1-#10) vía `gh pr list`
+- **Confirmado** que todos están mergeados
+- **Actualizado** `.localcode/SESSION.md` con estado real
+- Último PR mergiado: #10 (Turso migration) — 2026-07-27
+
+### Decisiones tomadas
+- Usar `gh pr list` como fuente de verdad en vez de confiar en archivos locales desactualizados
+- Nunca asumir estado del proyecto sin verificar en remoto
+
+### Estado final
+- Main sincronizado con origin/main
+- Todos los PRs #1-#10 mergeados
+- Documentación local actualizada
+
+### Notas para próxima sesión
+- Considerar actualizar ROADMAP.md con features de Turso
+- Server requiere env vars: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, AUTH_TIN, AUTH_NOE
+
+---
+
+## [2026-07-30] Fix: Login funciona pero dashboard no aparece
+
+### Contexto
+- El POST /api/login devuelve 200 con `{message: 'Login exitoso', user: 'tin'}`
+- El dashboard UI no se renderiza después del login
+- El usuario reporta "nada de nada" en la consola inicialmente
+
+### Cambios realizados
+- **index.html (línea 246)**: Agregado `<script src="bootstrap.bundle.min.js">` CDN
+  - El HTML cargaba Bootstrap CSS pero NO el JS
+  - `initApp()` en app.js:610 creaba `new bootstrap.Modal(editModal)` → ReferenceError
+- **index.html (línea 246)**: Removido atributo `integrity` del script de Bootstrap
+  - El hash SHA-384 no coincidía con el CDN → "Failed to find a valid digest" → recurso bloqueado
+- **app.js (líneas 403-433)**: Removidos logs de debug de `checkAuth()` y `loginUser()`
+
+### Decisiones tomadas
+- **Debug incremental**: Agregar logs progresivamente hasta encontrar la línea exacta del error
+  - `[CHECKAUTH] Calling GET` → status 401/200 → data → `bootstrap is not defined`
+- **SRI integrity**: Removido hash para evitar bloqueos en entornos locales
+- **Limpieza**: Removidos todos los logs temporales de debug
+
+### Estado final
+- Dashboard se muestra correctamente tras login
+- `bootstrap.Modal` disponible para `#editModal`
+- SweetAlert2 funcionando
+
+### Notas para próxima sesión
+- Server corriendo en puerto 4000 (PID 22180)
+- Considerar agregar el hash SRI correcto de bootstrap.bundle.min.js

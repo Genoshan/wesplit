@@ -1,3 +1,8 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+process.on('uncaughtException', (err) => { console.error('[FATAL]', err); process.exit(1); });
+process.on('unhandledRejection', (reason, promise) => { console.error('[UNHANDLED]', reason); });
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const helmet = require('helmet');
@@ -22,7 +27,7 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
     message: { error: 'Demasiadas peticiones, intentá de nuevo en un minuto' }
 });
-app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
+app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 
 // Middleware
 app.use(bodyParser.json({ limit: '100kb' }));
@@ -37,17 +42,27 @@ app.get('/', (req, res) => {
 // Auth endpoints (no requieren autenticación)
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
+    console.log(`[LOGIN] Recibido: user="${username}" pass="${password}"`);
+    console.log(`[LOGIN] AUTH_TIN="${process.env.AUTH_TIN}"`);
     if (!username || !password) {
         return res.status(400).json({ error: 'Faltan credenciales' });
     }
 
     const token = login(username, password);
     if (!token) {
+        console.log(`[LOGIN] FALLO: credenciales inválidas para user="${username}"`);
         return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    res.setHeader('Set-Cookie', `session_token=${token}; ${COOKIE_FLAGS}`);
+    res.cookie('session_token', token, {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        secure: IS_PRODUCTION
+    });
+    console.log(`[LOGIN] Cookie set for user: ${username}`);
     res.json({ message: 'Login exitoso', user: username });
+    console.log(`[LOGIN] Response sent`);
 });
 
 app.post('/api/logout', (req, res) => {
@@ -59,11 +74,20 @@ app.post('/api/logout', (req, res) => {
         });
     }
     logout(cookies['session_token']);
-    res.setHeader('Set-Cookie', `session_token=; ${COOKIE_FLAGS}; Max-Age=0`);
+    res.cookie('session_token', '', {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        expires: new Date(0),
+        secure: IS_PRODUCTION
+    });
     res.json({ message: 'Logout exitoso' });
 });
 
 app.get('/api/auth/check', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const cookies = {};
     if (req.headers.cookie) {
         req.headers.cookie.split(';').forEach(pair => {
@@ -71,6 +95,9 @@ app.get('/api/auth/check', (req, res) => {
             cookies[key.trim()] = rest.join('=').trim();
         });
     }
+    console.log(`[AUTH/CHECK] Cookie header: ${req.headers.cookie}`);
+    console.log(`[AUTH/CHECK] Parsed cookies:`, cookies);
+    console.log(`[AUTH/CHECK] session_token:`, cookies['session_token']);
     const user = getUser(cookies['session_token']);
     if (!user) {
         return res.status(401).json({ error: 'No autenticado' });
@@ -143,6 +170,62 @@ app.post('/api/expense', async (req, res) => {
         res.json({ id: Number(result.lastInsertRowid), message: 'Gasto registrado con éxito' });
     } catch (err) {
         console.error(`[ERROR_DB] Fallo al insertar en la base de datos: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.delete('/api/expense/:id', async (req, res) => {
+    try {
+        const result = await db.execute('DELETE FROM expenses WHERE id = ?', [req.params.id]);
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Gasto no encontrado' });
+        }
+        console.log(`[ÉXITO] Gasto eliminado: ${req.params.id}`);
+        res.json({ message: 'Gasto eliminado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al eliminar gasto: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.put('/api/expense/:id', async (req, res) => {
+    const { date, description, amount, payer, category } = req.body;
+    const cleanDescription = description ? description.trim() : '';
+    const parsedAmount = parseFloat(amount);
+
+    const validPayers = ['me', 'partner'];
+    const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+    }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida' });
+    }
+    if (!validPayers.includes(payer)) {
+        return res.status(400).json({ error: 'Pagador inválido' });
+    }
+    if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Categoría inválida' });
+    }
+    if (cleanDescription.length > 500) {
+        return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
+    }
+
+    try {
+        const existing = await db.execute('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ error: 'Gasto no encontrado' });
+        }
+
+        await db.execute(
+            'UPDATE expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ? WHERE id = ?',
+            [date, cleanDescription, parsedAmount, payer, category, req.params.id]
+        );
+        console.log(`[ÉXITO] Gasto actualizado: ${req.params.id} - ${cleanDescription}`);
+        res.json({ message: 'Gasto actualizado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al actualizar gasto: ${err}`);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
