@@ -9,7 +9,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const db = require('./database');
-const { authMiddleware, login, logout, getUser } = require('./auth');
+const { authMiddleware, login, logout, getUser, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -66,6 +66,66 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
+    const cookies = {};
+    if (req.headers.cookie) {
+        req.headers.cookie.split(';').forEach(pair => {
+            const [key, ...rest] = pair.split('=');
+            cookies[key.trim()] = rest.join('=').trim();
+        });
+    }
+    logout(cookies['session_token']);
+    res.cookie('session_token', '', {
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+        expires: new Date(0),
+        secure: IS_PRODUCTION
+    });
+    res.json({ message: 'Logout exitoso' });
+});
+
+// Google OAuth endpoints (sin rate limit)
+app.post('/api/google/init', apiLimiter, (req, res) => {
+    cleanGoogleSessions();
+    const result = initGoogleAuth();
+    if (!result) {
+        return res.status(500).json({ error: 'Google OAuth no configurado correctamente' });
+    }
+    res.json({ redirectUrl: result.authUrl });
+});
+
+app.get('/api/google/callback', apiLimiter, async (req, res) => {
+    const { code, state, error } = req.query;
+    
+    if (error) {
+        return res.status(400).json({ error: 'Error de autenticacion con Google' });
+    }
+    
+    if (!code || !state) {
+        return res.status(400).json({ error: 'Faltan parametros requeridos' });
+    }
+    
+    try {
+        const result = await handleGoogleCallback(code, state);
+        
+        if (result.error) {
+            return res.status(401).json({ error: result.error });
+        }
+        
+        res.cookie('session_token', result.token, {
+            httpOnly: true,
+            sameSite: 'strict',
+            path: '/',
+            secure: IS_PRODUCTION
+        });
+        res.redirect('/');
+    } catch (err) {
+        console.error('[GOOGLE CALLBACK] Error:', err);
+        res.status(500).json({ error: 'Error al completar el login con Google' });
+    }
+});
+
+app.post('/api/google/logout', apiLimiter, (req, res) => {
     const cookies = {};
     if (req.headers.cookie) {
         req.headers.cookie.split(';').forEach(pair => {

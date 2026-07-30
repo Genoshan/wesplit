@@ -16,6 +16,7 @@ Aplicación web simple de gestión de gastos compartidos para dos personas (Tin 
 3. **Divisiones 50/50** — todos los gastos se dividen equitativamente
 4. **Simplicidad sobre complejidad** — evitar refactorizaciones innecesarias o lógica compleja
 5. **No inferir requerimientos no expresados**
+6. **Siempre crear rama antes de implementar** — antes de tocar codigo, crear rama `feature/<nombre>`. NUNCA modificar `main` directamente.
 
 ## Flujo de Desarrollo
 
