@@ -17,7 +17,18 @@ async function initDB() {
             category TEXT
         )
     `);
-    console.log('[DB] Tabla expenses inicializada en Turso');
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS recurring_expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            amount REAL NOT NULL,
+            payer TEXT NOT NULL,
+            category TEXT NOT NULL,
+            frequency TEXT NOT NULL,
+            next_due_date TEXT NOT NULL
+        )
+    `);
+    console.log('[DB] Tablas expenses y recurring_expenses inicializadas en Turso');
 }
 
 initDB().catch(err => {

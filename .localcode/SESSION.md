@@ -1,14 +1,18 @@
 # Current Session Status
-- **Current Task**: Fix login dashboard rendering + implement edit/delete expense features
+- **Current Task**: Mobile-first responsive audit + fixes
 - **Estado Actual**: 
-    1. ✅ Dashboard funciona correctamente tras login (Bootstrap JS bundle agregado)
-    2. ✅ `bootstrap.Modal` disponible para `#editModal`
-    3. ✅ SweetAlert2 funcionando
-    4. ✅ CRUD completo: crear, editar, eliminar gastos
-    5. ✅ PUT /api/expense/:id y DELETE /api/expense/:id implementados
-    6. ✅ Modal de edición con formulario completo
-    7. ✅ Rama pusheada a origin/feature/expense-crud
+    1. ✅ 20 issues de responsividad identificados y corregidos
+    2. ✅ Chart height responsive (320px → 200px en mobile)
+    3. ✅ App-shell padding optimizado para mobile
+    4. ✅ Balance panel sin overflow en 320px
+    5. ✅ Form inputs font-size 16px (previene iOS keyboard zoom)
+    6. ✅ Summary grid breakpoints intermedios (480px, 360px)
+    7. ✅ Tabla con columnas ocultas progresivamente < 360px
+    8. ✅ Modal fullscreen en < 480px
+    9. ✅ Touch optimization + safe area insets para iPhone X+
+    10. ✅ Landscape mode media query
+    11. ✅ PR creado y pusheado a origin/feature/mobile-responsiveness
 - **Próximos Pasos**: 
-    - Crear PR #11 y mergear a main
-    - Considerar agregar hash SRI correcto para bootstrap.bundle.min.js
-- **Last Action Summary**: Commit y push de fix de login + features de edición/eliminación
+    - Revisar PR #13 y mergear a main
+    - Testing manual en dispositivos reales (iPhone, Android)
+- **Last Action Summary**: Commit y push de fixes mobile-first responsive — 20 issues resueltos
