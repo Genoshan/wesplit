@@ -59,7 +59,14 @@ function authMiddleware(req, res, next) {
 
 function login(username, password) {
     const user = USERS[username];
-    if (!user || !user.password || user.password !== password) return null;
+    console.log(`[AUTH login] username="${username}" password="${password}"`);
+    console.log(`[AUTH login] USERS[username] =`, user);
+    console.log(`[AUTH login] user.password="${user?.password}"`);
+    console.log(`[AUTH login] match: ${user?.password === password}`);
+    if (!user || !user.password || user.password !== password) {
+        console.log(`[AUTH login] FALLO: user=${!!user}, pass=${!!user?.password}, match=${user?.password === password}`);
+        return null;
+    }
 
     cleanExpiredSessions();
 

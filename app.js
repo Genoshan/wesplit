@@ -214,7 +214,7 @@ function renderHistory(items) {
     updateHistoryCount(items.length);
 
     if (items.length === 0) {
-        historyBody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
         return;
     }
 
@@ -228,6 +228,10 @@ function renderHistory(items) {
                 <td><span class="category-pill">${escapeHtml(categoryName(item.category))}</span></td>
                 <td class="text-end fw-semibold">${escapeHtml(formatCurrency(item.amount))}</td>
                 <td><span class="payer-pill payer-${escapeHtml(item.payer || 'unknown')}">${escapeHtml(paidBy)}</span></td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editExpense(${item.id})" title="Editar">Editar</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteExpense(${item.id})" title="Eliminar">Eliminar</button>
+                </td>
             </tr>
         `;
     }).join('');
@@ -315,7 +319,7 @@ async function fetchHistory() {
     } catch (error) {
         console.error('Error en fetchHistory:', error);
         Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
-        historyBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
     }
 }
 
@@ -399,16 +403,18 @@ function hydrateHistoryFilterOptions() {
 async function checkAuth() {
     try {
         const res = await fetch('/api/auth/check');
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+            throw new Error();
+        }
         const data = await res.json();
         currentUser = data;
         document.getElementById('login-screen').hidden = true;
         document.getElementById('app-main').hidden = false;
-        document.getElementById('user-label').textContent = data.username === 'tin' ? 'Tin' : 'Noe';
+        document.getElementById('user-label').textContent = data.user === 'tin' ? 'Tin' : 'Noe';
         const payerSelect = document.getElementById('expensePayer');
         if (payerSelect) payerSelect.value = data.payer;
         initApp();
-    } catch {
+    } catch (err) {
         currentUser = null;
         document.getElementById('login-screen').hidden = false;
         document.getElementById('app-main').hidden = true;
@@ -416,23 +422,29 @@ async function checkAuth() {
 }
 
 async function loginUser(username, password, feedbackEl) {
+    feedbackEl.textContent = 'Conectando...';
+    feedbackEl.classList.add('text-info');
     try {
         const res = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
+
         if (!res.ok) {
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             feedbackEl.textContent = data.error || 'Credenciales inválidas';
             feedbackEl.classList.add('text-danger');
             return;
         }
+
         feedbackEl.textContent = '';
         feedbackEl.classList.remove('text-danger');
-        checkAuth();
-    } catch {
-        feedbackEl.textContent = 'Error de conexión';
+        await checkAuth();
+    } catch (err) {
+        console.error('[LOGIN] Error:', err);
+        feedbackEl.textContent = 'Error de conexión con el servidor';
         feedbackEl.classList.add('text-danger');
     }
 }
@@ -440,11 +452,148 @@ async function loginUser(username, password, feedbackEl) {
 async function logoutUser() {
     await fetch('/api/logout', { method: 'POST' });
     currentUser = null;
-    document.getElementById('login-screen').hidden = false;
+    document.getElementById('login-screen').hidden = true;
     document.getElementById('app-main').hidden = true;
 }
 
+let editModalInstance = null;
+
+function openEditModal() {
+    if (editModalInstance) {
+        editModalInstance.show();
+    }
+}
+
+function closeEditModal() {
+    if (editModalInstance) {
+        editModalInstance.hide();
+    }
+    document.getElementById('edit-form').reset();
+}
+
+async function editExpense(id) {
+    try {
+        const expense = allExpenses.find(item => Number(item.id) === Number(id));
+        if (!expense) {
+            Swal.fire('Error', 'Gasto no encontrado.', 'error');
+            return;
+        }
+
+        document.getElementById('edit-id').value = expense.id;
+        document.getElementById('editDate').value = expense.date;
+        document.getElementById('editDescription').value = expense.description;
+        document.getElementById('editAmount').value = expense.amount;
+        document.getElementById('editCategory').value = expense.category || 'Otros';
+        document.getElementById('editPayer').value = expense.payer || 'me';
+
+        if (editModalInstance) {
+            editModalInstance.show();
+        }
+    } catch (err) {
+        console.error('Error al abrir modal de edici\u00f3n:', err);
+        Swal.fire('Error', 'No se pudo cargar el gasto para editar.', 'error');
+    }
+}
+
+async function saveExpenseUpdate() {
+    const id = document.getElementById('edit-id').value;
+    const date = document.getElementById('editDate').value;
+    const description = document.getElementById('editDescription').value;
+    const amount = document.getElementById('editAmount').value;
+    const category = document.getElementById('editCategory').value;
+    const payer = document.getElementById('editPayer').value;
+
+    if (!date) {
+        Swal.fire('Atenci\u00f3n', 'La fecha es obligatoria.', 'warning');
+        return;
+    }
+
+    const cleanDescription = description.trim();
+    if (!cleanDescription) {
+        Swal.fire('Atenci\u00f3n', 'La descripci\u00f3n no puede estar vac\u00eda.', 'warning');
+        return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        Swal.fire('Atenci\u00f3n', 'El monto debe ser un n\u00famero v\u00e1lido mayor a cero.', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/expense/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                date,
+                description: cleanDescription,
+                amount: parsedAmount,
+                category,
+                payer
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error en el servidor');
+        }
+
+        Swal.fire('\u00a1Actualizado!', 'Gasto actualizado con \u00e9xito', 'success');
+        closeEditModal();
+        await fetchHistory();
+    } catch (err) {
+        console.error('Error al actualizar gasto:', err);
+        Swal.fire('Error', err.message || 'No se pudo actualizar el gasto.', 'error');
+    }
+}
+
+async function deleteExpense(id) {
+    const result = await Swal.fire({
+        title: '\u00bfEliminar gasto?',
+        text: 'Esta acci\u00f3no no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'S\u00ed, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/expense/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error en el servidor');
+        }
+
+        Swal.fire('\u00a1Eliminado!', 'Gasto eliminado correctamente.', 'success');
+        await fetchHistory();
+    } catch (err) {
+        console.error('Error al eliminar gasto:', err);
+        Swal.fire('Error', err.message || 'No se pudo eliminar el gasto.', 'error');
+    }
+}
+
+async function handleDeleteFromEditModal() {
+    const id = document.getElementById('edit-id').value;
+    if (!id) {
+        Swal.fire('Error', 'No hay gasto seleccionado.', 'error');
+        return;
+    }
+    closeEditModal();
+    await deleteExpense(id);
+}
+
 function initApp() {
+    const editModal = document.getElementById('editModal');
+    if (editModal) {
+        editModalInstance = new bootstrap.Modal(editModal);
+    }
     fetchHistory();
 }
 
@@ -500,9 +649,31 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const editForm = document.getElementById('edit-form');
+    if (editForm) {
+        editForm.addEventListener('submit', event => {
+            event.preventDefault();
+            saveExpenseUpdate();
+        });
+    }
+
+    const editDeleteBtn = document.getElementById('delete-edit-btn');
+    if (editDeleteBtn) {
+        editDeleteBtn.addEventListener('click', handleDeleteFromEditModal);
+    }
+
+    const editModal = document.getElementById('editModal');
+    if (editModal) {
+        editModal.addEventListener('hidden.bs.modal', () => {
+            document.getElementById('edit-form').reset();
+        });
+    }
+
     checkAuth();
 });
 
 window.changeTheme = changeTheme;
 window.submitExpense = submitExpense;
 window.logoutUser = logoutUser;
+window.editExpense = editExpense;
+window.deleteExpense = deleteExpense;
