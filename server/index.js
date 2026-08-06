@@ -16,6 +16,15 @@ const PORT = process.env.PORT || 4000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const COOKIE_FLAGS = `HttpOnly; SameSite=Strict; Path=/${IS_PRODUCTION ? '; Secure' : ''}`;
 
+// Version endpoint (public, no auth required)
+const pkg = require('../package.json');
+app.get('/api/version', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.json({ version: pkg.version, buildTime: new Date().toISOString() });
+});
+
 // Security
 app.use(helmet({ contentSecurityPolicy: false }));
 

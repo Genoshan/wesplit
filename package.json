@@ -1,0 +1,8 @@
+{
+  "name": "wesplit",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "sync": "cd server && node ../scripts/sync.mjs"
+  }
+}

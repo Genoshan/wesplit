@@ -950,3 +950,12 @@ body {
     background: #dc3545;
     color: white;
 }
+
+.app-footer {
+    text-align: center;
+    padding: 12px 8px 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    user-select: none;
+}

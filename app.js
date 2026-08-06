@@ -663,6 +663,7 @@ function initApp() {
     }
     fetchHistory();
     loadRecurring();
+    loadVersion();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -932,3 +933,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+async function loadVersion() {
+    try {
+        const res = await fetch('/api/version');
+        const data = await res.json();
+        const el = document.getElementById('app-version');
+        if (el) el.textContent = data.version || '—';
+    } catch (err) {
+        console.warn('[VERSION] No se pudo cargar:', err.message);
+    }
+}

@@ -246,3 +246,36 @@ Cada entrada debe seguir este formato:
 - 4 nuevas media queries agregadas: 560px, 480px, 360px, landscape
 - Touch optimization y safe area para iOS moderno
 - Rama lista para PR: `feature/mobile-responsiveness`
+
+---
+
+## [2026-08-06] Versión visible en la UI + endpoint /api/version
+
+### Contexto
+- El usuario quiere ver la versión del deploy en Render para verificar que el pipeline funciona
+- Necesidad de tener un número de versión visible en la página y actualizable con cada deploy
+
+### Cambios realizados
+- **package.json (raíz)**: Agregado campo `"version": "0.1.0"`
+- **server/index.js**: Endpoint `GET /api/version` que lee `version` desde `package.json` + `buildTime`
+  - Con `Cache-Control: no-store` para forzar ver siempre la última versión
+- **index.html**: Footer con `<span id="app-version">—</span>`
+- **style.css**: Clase `.app-footer` — texto pequeño, centrado, color muted
+- **app.js**: Función `loadVersion()` que hace fetch a `/api/version` y llena el DOM
+  - Llamada desde `initApp()` al cargar la página
+
+### Decisiones tomadas
+- **Endpoint público**: No requiere auth — cualquiera puede ver la versión
+- **Version en package.json raíz**: Centralizado, `sync.mjs` ya lo lee
+- **Footer mínimo**: 11px, texto muted, no intrusivo
+- **buildTime**: Se incluye para depurar, puede servir para ver cuándo se desplegó
+
+### Estado final
+- Endpoint probado: `{"version":"0.1.0","buildTime":"2026-08-06T22:39:32.126Z"}`
+- Versión visible en la UI en la parte inferior central
+- Para cambiar versión: actualizar `package.json` y hacer deploy en Render
+
+### Notas para próxima sesión
+- Considerar actualizar versión automáticamente con git tags (v0.1.0, v0.2.0, etc.)
+- Pipeline de Render debería trigger con push a main
+- Crear PR para mergear esta feature
