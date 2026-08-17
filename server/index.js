@@ -286,21 +286,41 @@ app.get('/api/expenses', async (req, res) => {
     try {
         const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
         const rows = result.rows;
+
+        const expensesWithSplits = await Promise.all(rows.map(async (row) => {
+            const splitsResult = await db.execute('SELECT * FROM expense_splits WHERE expense_id = ?', [row.id]);
+            const splits = splitsResult.rows;
+            const meShare = splits.filter(s => s.user_id === 'me').reduce((sum, s) => sum + s.amount, 0);
+            const partnerShare = splits.filter(s => s.user_id === 'partner').reduce((sum, s) => sum + s.amount, 0);
+
+            return {
+                ...row,
+                splits,
+                meShare,
+                partnerShare
+            };
+        }));
+
         let totalMe = 0;
         let totalPartner = 0;
-        rows.forEach(row => {
-            if (row.payer === 'me') totalMe += row.amount;
-            else if (row.payer === 'partner') totalPartner += row.amount;
+
+        expensesWithSplits.forEach(expense => {
+            if (expense.payer === 'me') {
+                totalMe += (expense.amount - expense.meShare);
+            } else {
+                totalPartner += (expense.amount - expense.partnerShare);
+            }
         });
-        const difference = totalMe - totalPartner;
+
+        const balance = totalMe - totalPartner;
 
         res.json({
-            expenses: rows,
+            expenses: expensesWithSplits,
             summary: {
-                totalMe: totalMe,
-                totalPartner: totalPartner,
-                balance: difference > 0 ? (difference / 2).toFixed(2) : (Math.abs(difference) / 2).toFixed(2),
-                status: difference > 0 ? "Te deben" : "Le debes"
+                totalMe,
+                totalPartner,
+                balance: balance > 0 ? (balance / 2).toFixed(2) : (Math.abs(balance) / 2).toFixed(2),
+                status: balance > 0 ? "Te deben" : "Le debes"
             }
         });
     } catch (err) {
@@ -309,13 +329,32 @@ app.get('/api/expenses', async (req, res) => {
     }
 });
 
+app.get('/api/expense/:id', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
+        if (!result.rows || result.rows.length === 0) {
+            return res.status(404).json({ error: 'Gasto no encontrado' });
+        }
+        const expense = result.rows[0];
+
+        const splitsResult = await db.execute('SELECT * FROM expense_splits WHERE expense_id = ?', [req.params.id]);
+        const splits = splitsResult.rows;
+
+        res.json({ ...expense, splits });
+    } catch (err) {
+        console.error(`[ERROR_QUERY] Fallo al obtener gasto: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
 app.post('/api/expense', async (req, res) => {
-    const { date, description, amount, payer, category } = req.body;
+    const { date, description, amount, payer, category, split_mode, splits } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
 
     const validPayers = ['me', 'partner'];
     const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+    const validSplitModes = ['equal', 'solo', 'custom'];
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
         console.warn(`[VALIDACIÓN] Monto inválido recibido`);
@@ -333,14 +372,42 @@ app.post('/api/expense', async (req, res) => {
     if (cleanDescription.length > 500) {
         return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
     }
+    if (!split_mode || !validSplitModes.includes(split_mode)) {
+        return res.status(400).json({ error: 'Modo de división inválido' });
+    }
+
+    let splitAmounts = [];
+    if (split_mode === 'equal') {
+        splitAmounts = [{ user_id: 'me', amount: parsedAmount / 2 }, { user_id: 'partner', amount: parsedAmount / 2 }];
+    } else if (split_mode === 'solo') {
+        splitAmounts = [{ user_id: payer, amount: parsedAmount }];
+    } else if (split_mode === 'custom') {
+        if (!Array.isArray(splits) || splits.length === 0) {
+            return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+        }
+        let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+            return res.status(400).json({ error: `La suma de los splits ($${totalSplit}) no coincide con el monto ($${parsedAmount})` });
+        }
+        splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
+    }
 
     try {
         const result = await db.execute({
             sql: 'INSERT INTO expenses (date, description, amount, payer, category) VALUES (?, ?, ?, ?, ?)',
             args: [date, cleanDescription, parsedAmount, payer, category],
         });
-        console.log(`[ÉXITO] Gasto registrado: ${cleanDescription} - $${parsedAmount}`);
-        res.json({ id: Number(result.lastInsertRowid), message: 'Gasto registrado con éxito' });
+        const expenseId = result.lastInsertRowid;
+
+        for (const split of splitAmounts) {
+            await db.execute({
+                sql: 'INSERT INTO expense_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                args: [Number(expenseId), split.user_id, split.amount],
+            });
+        }
+
+        console.log(`[ÉXITO] Gasto registrado: ${cleanDescription} - $${parsedAmount} (${split_mode})`);
+        res.json({ id: Number(expenseId), message: 'Gasto registrado con éxito' });
     } catch (err) {
         console.error(`[ERROR_DB] Fallo al insertar en la base de datos: ${err}`);
         res.status(500).json({ error: 'Error interno en la base de datos' });
@@ -362,12 +429,13 @@ app.delete('/api/expense/:id', async (req, res) => {
 });
 
 app.put('/api/expense/:id', async (req, res) => {
-    const { date, description, amount, payer, category } = req.body;
+    const { date, description, amount, payer, category, split_mode, splits } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
 
     const validPayers = ['me', 'partner'];
     const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+    const validSplitModes = ['equal', 'solo', 'custom'];
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ error: 'El monto debe ser un número positivo' });
@@ -384,6 +452,25 @@ app.put('/api/expense/:id', async (req, res) => {
     if (cleanDescription.length > 500) {
         return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
     }
+    if (!split_mode || !validSplitModes.includes(split_mode)) {
+        return res.status(400).json({ error: 'Modo de división inválido' });
+    }
+
+    let splitAmounts = [];
+    if (split_mode === 'equal') {
+        splitAmounts = [{ user_id: 'me', amount: parsedAmount / 2 }, { user_id: 'partner', amount: parsedAmount / 2 }];
+    } else if (split_mode === 'solo') {
+        splitAmounts = [{ user_id: payer, amount: parsedAmount }];
+    } else if (split_mode === 'custom') {
+        if (!Array.isArray(splits) || splits.length === 0) {
+            return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+        }
+        let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+            return res.status(400).json({ error: `La suma de los splits ($${totalSplit}) no coincide con el monto ($${parsedAmount})` });
+        }
+        splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
+    }
 
     try {
         const existing = await db.execute('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
@@ -395,7 +482,17 @@ app.put('/api/expense/:id', async (req, res) => {
             'UPDATE expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ? WHERE id = ?',
             [date, cleanDescription, parsedAmount, payer, category, req.params.id]
         );
-        console.log(`[ÉXITO] Gasto actualizado: ${req.params.id} - ${cleanDescription}`);
+
+        await db.execute('DELETE FROM expense_splits WHERE expense_id = ?', [req.params.id]);
+
+        for (const split of splitAmounts) {
+            await db.execute({
+                sql: 'INSERT INTO expense_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                args: [req.params.id, split.user_id, split.amount],
+            });
+        }
+
+        console.log(`[ÉXITO] Gasto actualizado: ${req.params.id} - ${cleanDescription} (${split_mode})`);
         res.json({ message: 'Gasto actualizado con éxito' });
     } catch (err) {
         console.error(`[ERROR_DB] Fallo al actualizar gasto: ${err}`);
