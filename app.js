@@ -11,6 +11,7 @@ let historyFilters = {
 };
 
 let currentUser = null;
+let currentSplitMode = 'equal';
 
 document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
 
@@ -82,34 +83,67 @@ async function submitExpense(amount, description) {
         return;
     }
 
+    const splitMode = document.querySelector('input[name="split_mode"]:checked')?.value || 'equal';
+    let body = {
+        amount: parsedAmount,
+        description: cleanDescription,
+        category: document.getElementById('expenseCategory').value,
+        payer: document.getElementById('expensePayer').value,
+        date: new Date().toISOString().split('T')[0],
+        split_mode: splitMode
+    };
+
+    if (splitMode === 'custom') {
+        const meInput = document.getElementById('splitMe');
+        const partnerInput = document.getElementById('splitPartner');
+        const meAmount = parseFloat(meInput.value || 0);
+        const partnerAmount = parseFloat(partnerInput.value || 0);
+        const calculatedPartner = parsedAmount - meAmount;
+
+        if (isNaN(meAmount) || meAmount < 0 || meAmount > parsedAmount) {
+            Swal.fire('Atención', 'El monto para Tin debe ser válido.', 'warning');
+            return;
+        }
+
+        const splits = [
+            { user_id: 'me', amount: meAmount },
+            { user_id: 'partner', amount: partnerAmount > 0 ? partnerAmount : calculatedPartner }
+        ];
+
+        const totalSplit = splits.reduce((sum, s) => sum + s.amount, 0);
+        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+            Swal.fire('Atención', `Los montos deben sumar exactamente $${parsedAmount}.`, 'warning');
+            return;
+        }
+
+        body.splits = splits;
+    }
+
     setSubmitState(true);
 
     try {
         const response = await fetch('/api/expense', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: parsedAmount,
-                description: cleanDescription,
-                category: document.getElementById('expenseCategory').value,
-                payer: document.getElementById('expensePayer').value,
-                date: new Date().toISOString().split('T')[0]
-            })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
-            console.error('Error en el servidor:', response.statusText);
-            Swal.fire('Error', 'Error en el servidor al guardar el gasto.', 'error');
-            return;
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error en el servidor');
         }
 
         document.getElementById('expense-form').reset();
+        document.getElementById('custom-split-section').style.display = 'none';
+        document.getElementById('splitMe').value = '';
+        document.getElementById('splitPartner').value = '';
+        currentSplitMode = 'equal';
         Swal.fire('¡Éxito!', 'Gasto registrado con éxito', 'success');
         await fetchHistory();
         document.getElementById('expenseAmount').focus();
     } catch (err) {
         console.error('Error de conexión:', err);
-        Swal.fire('Fallo de conexión', 'No se pudo conectar con el servidor local.', 'error');
+        Swal.fire('Error', err.message || 'Error en el servidor al guardar el gasto.', 'error');
     } finally {
         setSubmitState(false);
     }
@@ -214,12 +248,29 @@ function renderHistory(items) {
     updateHistoryCount(items.length);
 
     if (items.length === 0) {
-        historyBody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
         return;
     }
 
     historyBody.innerHTML = items.map(item => {
         const paidBy = payerName(item.payer);
+        let distributionText = '';
+
+        if (item.splits && item.splits.length > 0) {
+            const meSplit = item.splits.find(s => s.user_id === 'me');
+            const partnerSplit = item.splits.find(s => s.user_id === 'partner');
+            const meAmount = meSplit ? formatCurrency(meSplit.amount) : '-';
+            const partnerAmount = partnerSplit ? formatCurrency(partnerSplit.amount) : '-';
+
+            if (item.splits.length === 1 && meSplit && meSplit.amount === item.amount) {
+                distributionText = `<span class="history-distribution">Solo pagó ${payerName(item.payer)}</span>`;
+            } else if (item.splits.length === 1) {
+                const other = item.splits[0].user_id === 'me' ? 'Tin' : 'Noe';
+                distributionText = `<span class="history-distribution">Solo ${other}</span>`;
+            } else {
+                distributionText = `<span class="distribution-badge">${meAmount} / ${partnerAmount}</span>`;
+            }
+        }
 
         return `
             <tr>
@@ -228,8 +279,9 @@ function renderHistory(items) {
                 <td><span class="category-pill">${escapeHtml(categoryName(item.category))}</span></td>
                 <td class="text-end fw-semibold">${escapeHtml(formatCurrency(item.amount))}</td>
                 <td><span class="payer-pill payer-${escapeHtml(item.payer || 'unknown')}">${escapeHtml(paidBy)}</span></td>
-                <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editExpense(${item.id})" title="Editar">Editar</button>
+                <td><div>${distributionText}</div></td>
+                <td class="text-end history-actions">
+                    <button class="btn btn-sm btn-outline-primary" onclick="editExpense(${item.id})" title="Editar">Editar</button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteExpense(${item.id})" title="Eliminar">Eliminar</button>
                 </td>
             </tr>
@@ -553,6 +605,34 @@ async function editExpense(id) {
         document.getElementById('editCategory').value = expense.category || 'Otros';
         document.getElementById('editPayer').value = expense.payer || 'me';
 
+        if (expense.splits && expense.splits.length > 0) {
+            const meSplit = expense.splits.find(s => s.user_id === 'me');
+            const partnerSplit = expense.splits.find(s => s.user_id === 'partner');
+            let detectedMode = 'equal';
+
+            if (expense.splits.length === 1) {
+                detectedMode = 'solo';
+            } else if (meSplit && partnerSplit && Math.abs(meSplit.amount - expense.amount / 2) > 0.01) {
+                detectedMode = 'custom';
+            }
+
+            const modeRadio = document.querySelector(`input[name="edit_split_mode"][value="${detectedMode}"]`);
+            if (modeRadio) modeRadio.checked = true;
+
+            const editCustomSplitSection = document.getElementById('edit-custom-split-section');
+            if (detectedMode === 'custom') {
+                editCustomSplitSection.style.display = 'block';
+                document.getElementById('editSplitMe').value = meSplit ? meSplit.amount : '';
+                const partnerAmount = partnerSplit ? partnerSplit.amount : (expense.amount - (meSplit ? meSplit.amount : 0));
+                document.getElementById('editSplitPartner').value = partnerAmount;
+            } else {
+                editCustomSplitSection.style.display = 'none';
+            }
+        } else {
+            document.querySelector('input[name="edit_split_mode"][value="equal"]').checked = true;
+            document.getElementById('edit-custom-split-section').style.display = 'none';
+        }
+
         if (editModalInstance) {
             editModalInstance.show();
         }
@@ -587,17 +667,36 @@ async function saveExpenseUpdate() {
         return;
     }
 
+    const splitMode = document.querySelector('input[name="edit_split_mode"]:checked')?.value || 'equal';
+    let body = {
+        date,
+        description: cleanDescription,
+        amount: parsedAmount,
+        category,
+        payer,
+        split_mode: splitMode
+    };
+
+    if (splitMode === 'custom') {
+        const meAmount = parseFloat(document.getElementById('editSplitMe').value || 0);
+        const partnerAmount = parseFloat(document.getElementById('editSplitPartner').value || 0);
+        const splits = [
+            { user_id: 'me', amount: meAmount },
+            { user_id: 'partner', amount: partnerAmount }
+        ];
+        const totalSplit = splits.reduce((sum, s) => sum + s.amount, 0);
+        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+            Swal.fire('Atenci\u00f3n', `Los montos deben sumar exactamente $${parsedAmount}.`, 'warning');
+            return;
+        }
+        body.splits = splits;
+    }
+
     try {
         const response = await fetch(`/api/expense/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                date,
-                description: cleanDescription,
-                amount: parsedAmount,
-                category,
-                payer
-            })
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
@@ -750,6 +849,80 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const splitModeRadios = document.querySelectorAll('input[name="split_mode"]');
+    const customSplitSection = document.getElementById('custom-split-section');
+
+    splitModeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            currentSplitMode = e.target.value;
+            if (customSplitSection) {
+                customSplitSection.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            }
+        });
+    });
+
+    const splitMeInput = document.getElementById('splitMe');
+    const splitPartnerInput = document.getElementById('splitPartner');
+    const splitTotalDisplay = document.getElementById('splitTotalDisplay');
+    const splitError = document.getElementById('splitError');
+
+    function updateSplitTotal() {
+        const meAmount = parseFloat(splitMeInput?.value || 0);
+        const amount = parseFloat(document.getElementById('expenseAmount')?.value || 0);
+        const partnerAmount = amount - meAmount;
+
+        if (isNaN(amount) || amount <= 0 || customSplitSection.style.display === 'none') {
+            if (splitPartnerInput) splitPartnerInput.value = '';
+            if (splitTotalDisplay) splitTotalDisplay.textContent = formatCurrency(0);
+            if (splitError) splitError.style.display = 'none';
+            return;
+        }
+
+        if (splitPartnerInput) splitPartnerInput.value = partnerAmount > 0 ? partnerAmount.toFixed(2) : '0';
+        if (splitTotalDisplay) splitTotalDisplay.textContent = formatCurrency(meAmount + (splitPartnerInput ? parseFloat(splitPartnerInput.value) || 0 : 0));
+        if (splitError) {
+            const total = meAmount + (splitPartnerInput ? parseFloat(splitPartnerInput.value) || 0 : 0);
+            splitError.style.display = Math.abs(total - amount) > 0.01 ? 'inline' : 'none';
+        }
+    }
+
+    if (splitMeInput) splitMeInput.addEventListener('input', updateSplitTotal);
+    if (splitPartnerInput) splitPartnerInput.addEventListener('input', updateSplitTotal);
+
+    const amountInput = document.getElementById('expenseAmount');
+    if (amountInput) amountInput.addEventListener('input', updateSplitTotal);
+
+    const editSplitModeRadios = document.querySelectorAll('input[name="edit_split_mode"]');
+    const editCustomSplitSection = document.getElementById('edit-custom-split-section');
+
+    editSplitModeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (editCustomSplitSection) {
+                editCustomSplitSection.style.display = e.target.value === 'custom' ? 'block' : 'none';
+            }
+        });
+    });
+
+    const editSplitMeInput = document.getElementById('editSplitMe');
+    const editSplitPartnerInput = document.getElementById('editSplitPartner');
+    const editSplitTotalDisplay = document.getElementById('editSplitTotalDisplay');
+    const editSplitError = document.getElementById('editSplitError');
+
+    function updateEditSplitTotal() {
+        const meAmount = parseFloat(editSplitMeInput?.value || 0);
+        const partnerAmount = parseFloat(editSplitPartnerInput?.value || 0);
+        const total = meAmount + partnerAmount;
+
+        if (editSplitTotalDisplay) editSplitTotalDisplay.textContent = formatCurrency(total);
+        if (editSplitError) {
+            const amount = parseFloat(document.getElementById('editAmount')?.value || 0);
+            editSplitError.style.display = amount > 0 && Math.abs(total - amount) > 0.01 ? 'inline' : 'none';
+        }
+    }
+
+    if (editSplitMeInput) editSplitMeInput.addEventListener('input', updateEditSplitTotal);
+    if (editSplitPartnerInput) editSplitPartnerInput.addEventListener('input', updateEditSplitTotal);
+
     checkAuth();
 });
 
@@ -841,7 +1014,8 @@ async function addRecurringExpense(id) {
                 description: item.description,
                 category: item.category,
                 payer: item.payer,
-                date: new Date().toISOString().split('T')[0]
+                date: new Date().toISOString().split('T')[0],
+                split_mode: 'equal'
             })
         });
 

@@ -18,6 +18,15 @@ async function initDB() {
         )
     `);
     await db.execute(`
+        CREATE TABLE IF NOT EXISTS expense_splits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            expense_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
+        )
+    `);
+    await db.execute(`
         CREATE TABLE IF NOT EXISTS recurring_expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             description TEXT NOT NULL,
@@ -28,7 +37,20 @@ async function initDB() {
             next_due_date TEXT NOT NULL
         )
     `);
-    console.log('[DB] Tablas expenses y recurring_expenses inicializadas en Turso');
+
+    // Migrar gastos existentes con 50/50 splits
+    const existing = await db.execute('SELECT * FROM expenses');
+    if (existing.rows.length > 0) {
+        for (const row of existing.rows) {
+            const half = row.amount / 2;
+            await db.execute({
+                sql: 'INSERT INTO expense_splits (expense_id, user_id, amount) VALUES (?, ?, ?), (?, ?, ?)',
+                args: [row.id, 'me', half, row.id, 'partner', half]
+            });
+        }
+    }
+
+    console.log('[DB] Tablas expenses, expense_splits y recurring_expenses inicializadas');
 }
 
 initDB().catch(err => {

@@ -128,6 +128,38 @@
                             <option value="partner">Noe</option>
                         </select>
 
+                        <label>Split</label>
+                        <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división">
+                            <label class="split-option">
+                                <input type="radio" name="split_mode" value="equal" checked>
+                                <span class="split-label">50/50</span>
+                            </label>
+                            <label class="split-option">
+                                <input type="radio" name="split_mode" value="solo">
+                                <span class="split-label">Solo pagué yo</span>
+                            </label>
+                            <label class="split-option">
+                                <input type="radio" name="split_mode" value="custom">
+                                <span class="split-label">Montos exactos</span>
+                            </label>
+                        </div>
+
+                        <div id="custom-split-section" class="custom-split-section" style="display:none;">
+                            <div class="custom-split-row" data-user="me">
+                                <label>Tin:</label>
+                                <input type="number" id="splitMe" class="form-control split-input" min="0" step="0.01" placeholder="0">
+                            </div>
+                            <div class="custom-split-row" data-user="partner">
+                                <label>Noe:</label>
+                                <input type="number" id="splitPartner" class="form-control split-input" min="0" step="0.01" placeholder="0">
+                            </div>
+                            <div class="custom-split-total">
+                                <span>Total:</span>
+                                <strong id="splitTotalDisplay">$0</strong>
+                                <span id="splitError" class="text-danger" style="display:none;">No coincide</span>
+                            </div>
+                        </div>
+
                         <button id="submit-expense" type="submit" class="btn btn-primary btn-action w-100">
                             Agregar gasto
                         </button>
@@ -175,6 +207,7 @@
                                     <th class="text-start">Categoría</th>
                                     <th class="text-end">Monto</th>
                                     <th class="text-start">Pagador</th>
+                                    <th class="text-start">Distribuye</th>
                                     <th class="text-end">Acciones</th>
                                 </tr>
                             </thead>
@@ -305,6 +338,40 @@
                                     <option value="me">Tin</option>
                                     <option value="partner">Noe</option>
                                 </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label>Split</label>
+                                <div class="split-mode-selector" id="edit-split-selector" role="radiogroup">
+                                    <label class="split-option">
+                                        <input type="radio" name="edit_split_mode" value="equal" checked>
+                                        <span class="split-label">50/50</span>
+                                    </label>
+                                    <label class="split-option">
+                                        <input type="radio" name="edit_split_mode" value="solo">
+                                        <span class="split-label">Solo pagué yo</span>
+                                    </label>
+                                    <label class="split-option">
+                                        <input type="radio" name="edit_split_mode" value="custom">
+                                        <span class="split-label">Montos exactos</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="edit-custom-split-section" class="custom-split-section" style="display:none;">
+                                <div class="custom-split-row" data-user="me">
+                                    <label>Tin:</label>
+                                    <input type="number" id="editSplitMe" class="form-control split-input" min="0" step="0.01" placeholder="0">
+                                </div>
+                                <div class="custom-split-row" data-user="partner">
+                                    <label>Noe:</label>
+                                    <input type="number" id="editSplitPartner" class="form-control split-input" min="0" step="0.01" placeholder="0">
+                                </div>
+                                <div class="custom-split-total">
+                                    <span>Total:</span>
+                                    <strong id="editSplitTotalDisplay">$0</strong>
+                                    <span id="editSplitError" class="text-danger" style="display:none;">No coincide</span>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-footer">

@@ -2,10 +2,10 @@
   "name": "wesplit-server",
   "version": "1.0.0",
   "description": "Backend for WeSplit - expense sharing app",
-  "main": "server/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
+    "start": "node index.js",
+    "dev": "node --watch index.js",
     "test": "echo \"No tests yet\" && exit 0",
     "lint": "eslint .",
     "sync": "node ../scripts/sync.mjs"
