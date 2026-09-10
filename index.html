@@ -104,6 +104,7 @@
                     <div class="section-heading">
                         <p class="eyebrow">Nuevo movimiento</p>
                         <h2 id="form-title">Agregar gasto</h2>
+                        <button type="button" id="toggle-mode-btn" class="btn btn-sm btn-outline-primary">Cambiar a Pago</button>
                     </div>
 
                     <form id="expense-form" class="form-container">
@@ -178,6 +179,58 @@
                         </button>
                         <p id="form-feedback" class="form-feedback" role="status" aria-live="polite"></p>
                     </form>
+
+                    <form id="payment-form-inline" class="form-container" style="display:none;">
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <label for="paymentAmountInline">Monto</label>
+                                <input type="number" id="paymentAmountInline" placeholder="Ej. 1000" class="form-control" min="1" step="0.01" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="paymentCurrencyInline">Moneda</label>
+                                <select id="paymentCurrencyInline" class="form-select">
+                                    <option value="UYU">UYU - Peso uruguayo ($)</option>
+                                    <option value="USD">USD - Dólar (US$)</option>
+                                    <option value="BRL">BRL - Real brasileño (R$)</option>
+                                    <option value="EUR">EUR - Euro (€)</option>
+                                    <option value="ARS">ARS - Peso argentino (AR$)</option>
+                                    <option value="CLP">CLP - Peso chileno (CL$)</option>
+                                    <option value="MXN">MXN - Peso mexicano (MX$)</option>
+                                    <option value="COP">COP - Peso colombiano (CO$)</option>
+                                    <option value="PEN">PEN - Sol peruano (S/)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-12 col-md-6">
+                                <label for="paymentFromInline">Pagó</label>
+                                <select id="paymentFromInline" class="form-select" required>
+                                    <option value="me">Tin</option>
+                                    <option value="partner">Noe</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="paymentToInline">Recibió</label>
+                                <select id="paymentToInline" class="form-select" required>
+                                    <option value="partner">Noe</option>
+                                    <option value="me">Tin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-12 col-md-6">
+                                <label for="paymentDateInline">Fecha</label>
+                                <input type="date" id="paymentDateInline" class="form-control" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="paymentDescInline">Descripción</label>
+                                <input type="text" id="paymentDescInline" placeholder="Ej. Pago parcial de deuda" class="form-control">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-action w-100 mt-3">
+                            Registrar pago
+                        </button>
+                    </form>
                 </div>
             </section>
 
@@ -238,6 +291,41 @@
                 </div>
             </section>
         </div>
+
+        <section class="card app-card payments-card" aria-labelledby="payments-title">
+            <div class="card-body p-4">
+                <div class="section-heading payments-heading">
+                    <div>
+                        <p class="eyebrow">Liquidaciones</p>
+                        <h2 id="payments-title">Historial de pagos</h2>
+                    </div>
+                    <span id="payments-count" class="history-count">0 pagos</span>
+                </div>
+
+                
+
+                <div class="table-responsive">
+                    <table id="payments-table" class="table table-hover table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th class="text-start">Fecha</th>
+                                <th class="text-start">Descripción</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-start">Moneda</th>
+                                <th class="text-start">De</th>
+                                <th class="text-start">A</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payments-body">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">No hay pagos registrados</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
 
     <section class="card app-card recurring-card" aria-labelledby="recurring-title">
         <div class="card-body p-4">

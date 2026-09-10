@@ -48,6 +48,18 @@ async function initDB() {
             is_default INTEGER NOT NULL DEFAULT 0
         )
     `);
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_user TEXT NOT NULL,
+            to_user TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'UYU',
+            date TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
 
     // Insertar monedas predeterminadas si no existen
     const defaultCurrencies = [
