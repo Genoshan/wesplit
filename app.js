@@ -581,6 +581,51 @@ function setMonthFilter(month) {
     applyHistoryFilters();
 }
 
+async function refreshHistoryWithFilters() {
+    const dateFrom = document.getElementById('date-from').value;
+    const dateTo = document.getElementById('date-to').value;
+
+    const params = new URLSearchParams();
+    if (dateFrom) params.append('startDate', dateFrom);
+    if (dateTo) params.append('endDate', dateTo);
+
+    try {
+        const response = await fetch(`/api/expenses?${params}`);
+        if (!response.ok) throw new Error('Error en la red: ' + response.status);
+
+        const data = await response.json();
+        allExpenses = data.expenses || [];
+        hydrateHistoryFilterOptions();
+        applyHistoryFilters();
+        updateChart(allExpenses);
+        updateSummary(data.summary, allExpenses);
+        allPayments = data.payments || [];
+        renderPayments();
+    } catch (error) {
+        console.error('Error en refreshHistoryWithFilters:', error);
+        Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
+    }
+}
+
+async function exportToCsv() {
+    try {
+        const response = await fetch('/api/export/csv');
+        if (!response.ok) throw new Error('Error en la red: ' + response.status);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wesplit-expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Error en exportToCsv:', error);
+        Swal.fire('Error', 'No se pudo exportar el CSV.', 'error');
+    }
+}
+
 function hydrateHistoryFilterOptions() {
     const categoryFilter = document.getElementById('category-filter');
     const monthFilter = document.getElementById('month-filter');
@@ -993,6 +1038,24 @@ document.addEventListener('DOMContentLoaded', () => {
             historyFilters.currency = event.target.value;
             applyHistoryFilters();
         });
+    }
+
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    if (dateFrom) {
+        dateFrom.addEventListener('change', () => {
+            refreshHistoryWithFilters();
+        });
+    }
+    if (dateTo) {
+        dateTo.addEventListener('change', () => {
+            refreshHistoryWithFilters();
+        });
+    }
+
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', exportToCsv);
     }
 
     const loginForm = document.getElementById('login-form');

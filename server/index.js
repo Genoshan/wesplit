@@ -3,6 +3,29 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 process.on('uncaughtException', (err) => { console.error('[FATAL]', err); process.exit(1); });
 process.on('unhandledRejection', (reason, promise) => { console.error('[UNHANDLED]', reason); });
 
+function categoryName(cat) {
+    const names = {
+        'food': 'Alimentación',
+        'transport': 'Transporte',
+        'entertainment': 'Ocio',
+        'bills': 'Servicios',
+        'others': 'Otros'
+    };
+    return names[cat] || cat;
+}
+
+function payerName(payer) {
+    return payer === 'me' ? 'Tin' : 'Noe';
+}
+
+function fromUser(user) {
+    return user === 'me' ? 'Tin' : 'Noe';
+}
+
+function toUser(user) {
+    return user === 'me' ? 'Noe' : 'Tin';
+}
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const helmet = require('helmet');
@@ -354,7 +377,21 @@ app.get('/api/expenses', async (req, res) => {
         });
         if (!currencies[baseCurrency]) baseCurrency = 'UYU';
 
-        const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
+        const { startDate, endDate } = req.query;
+        let whereClause = '';
+        const params = [];
+        if (startDate && endDate) {
+            whereClause = 'WHERE date >= ? AND date <= ?';
+            params = [startDate, endDate];
+        } else if (startDate) {
+            whereClause = 'WHERE date >= ?';
+            params = [startDate];
+        } else if (endDate) {
+            whereClause = 'WHERE date <= ?';
+            params = [endDate];
+        }
+
+        const result = await db.execute(`SELECT * FROM expenses ${whereClause} ORDER BY date DESC`, params);
         const rows = result.rows;
 
         const expensesWithSplits = await Promise.all(rows.map(async (row) => {
@@ -442,6 +479,50 @@ app.get('/api/expense/:id', async (req, res) => {
         res.json({ ...expense, splits });
     } catch (err) {
         console.error(`[ERROR_QUERY] Fallo al obtener gasto: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.get('/api/export/csv', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
+        const expenses = result.rows;
+
+        const splitsResult = await db.execute('SELECT * FROM expense_splits ORDER BY expense_id');
+        const splits = splitsResult.rows;
+
+        const paymentsResult = await db.execute('SELECT * FROM payments ORDER BY date DESC');
+        const payments = paymentsResult.rows;
+
+        const expensesWithSplits = await Promise.all(expenses.map(async (expense) => {
+            const expenseSplits = splits.filter(s => s.expense_id === expense.id);
+            return { ...expense, splits: expenseSplits };
+        }));
+
+        const header = 'Fecha,Descripcion,Categoría,Monto,Moneda,Pagador,Me Share,Partner Share';
+        const paymentHeader = 'Fecha,Descripcion,Monto,Moneda,De,Para';
+
+        const expenseRows = expensesWithSplits.map(e => {
+            const meShare = e.splits?.filter(s => s.user_id === 'me').reduce((sum, s) => sum + s.amount, 0) || 0;
+            const partnerShare = e.splits?.filter(s => s.user_id === 'partner').reduce((sum, s) => sum + s.amount, 0) || 0;
+            const desc = (e.description || '').replace(/"/g, '""');
+            const cur = e.currency || 'UYU';
+            return `${e.date},"${desc}",${categoryName(e.category)},${e.amount},${cur},${payerName(e.payer)},${meShare.toFixed(2)},${partnerShare.toFixed(2)}`;
+        }).join('\n');
+
+        const paymentRows = payments.map(p => {
+            const desc = (p.description || '').replace(/"/g, '""');
+            const cur = p.currency || 'UYU';
+            return `${p.date},"${desc}",${p.amount},${cur},${fromUser(p.from_user)},${toUser(p.to_user)}`;
+        }).join('\n');
+
+        const csv = `${header}\n${expenseRows}\n\n${paymentHeader}\n${paymentRows}`;
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename=wesplit-expenses.csv');
+        res.send(csv);
+    } catch (err) {
+        console.error(`[ERROR_QUERY] Fallo al exportar CSV: ${err}`);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
