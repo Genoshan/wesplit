@@ -1,60 +1,36 @@
-# Reglas del Proyecto
+# Contexto y Reglas de Trabajo
 
-@AGENTS.md
 
-## Claude Code
+## Ubicación y Rutas
+- **Directorio Raíz:** Estás ubicado en la raíz del proyecto.
+- **Rutas Relativas:** Usa siempre rutas relativas desde la raíz (ej. `./src/`, `./.claude/docs/`).
+- **Verificación:** Antes de reportar que un archivo no existe, confirma con `ls <ruta>`.
+- **Prohibición:** NUNCA crees archivos `.md` sueltos en la raíz o subcarpetas. Todo va en `./.claude/docs/`.
 
-### Protocolo de Sesión (Checkpoint Automático)
 
-**AL INICIO de cada sesión:**
-1. Leer `memory/BITACORA.md` para contexto anterior
-2. Leer `.localcode/SESSION.md` para estado actual
-3. Saludar al usuario con el contexto recuperado
+## Stack & Entorno
+- **Backend:** Node.js + Express 5.x
+- **Base de datos:** libSQL (@libsql/client)
+- **Frontend:** HTML/CSS/JS vanilla
+- **Iniciar servidor:** `npm start` (desde `./server/`)
+- **Dev mode:** `npm run dev` (auto-reload)
+- **Linting:** `npm run lint`
+- **Sincronización:** `npm run sync`
 
-**DURANTE la sesión (después de cada acción relevante):**
-- Después de cada commit, cambio importante o decisión → actualizar BITACORA.md
-- No esperar a que el usuario pregunte
-- No esperar al "final" de la sesión
-- Patrón: **checkpoint incremental** como WAL en bases de datos
 
-**SI el usuario se despide o la sesión termina:**
-1. Actualizar BITACORA.md con resumen final
-2. Actualizar SESSION.md con estado actual
-3. Actualizar MEMORY.md si hay cambios estructurales
+## Reglas de Comportamiento
+- Respuestas concisas enfocadas directamente en código.
+- PROHIBIDO leer la carpeta `./.claude/docs/` entera al iniciar.
+- Ante dudas sobre el historial o errores, consulta de forma puntual `./.claude/docs/troubleshooting.md` o ejecuta `git log -S "<termino>"`.
 
-### Formato de Bitácora
 
-```markdown
-## [YYYY-MM-DD] Título de la sesión
+## Ubicación de Documentos del Proyecto
+- **Los documentos importantes del proyecto viven en `.claude/docs/`**.
+- Archivos como `ROADMAP.md`, `REQUIREMENTS.md`, `HEARTBEAT.md`, `IDENTITY.md`, `SOUL.md`, etc. están en `.claude/docs/`, NO en la raíz.
+- Si un archivo `.md` importante no existe en la raíz, **siempre** debe buscarse en `.claude/docs/`.
+- NUNCA crees archivos `.md` en la raíz.
 
-### Contexto
-- Qué se estaba haciendo antes
-
-### Cambios realizados
-- Archivo A: se modificó X
-- Archivo B: se creó Y
-
-### Decisiones tomadas
-- Se decidió X porque Y
-
-### Estado final
-- Qué quedó funcionando
-
-### Notas para próxima sesión
-- Puntos a retomar
-```
-
-### Reglas Críticas
-
-1. **Checkpoint después de cada acción relevante** — no esperar al final
-2. **NUNCA preguntar si actualizar** — siempre hacerlo
-3. **NUNCA preguntar si crear archivo** — crearlo directamente
-4. **Si el usuario se despide** → activar protocolo de cierre
-5. **Si la sesión se corta** → el último checkpoint tiene el estado
-
-### Auto Memory
-
-Guarda notas automáticamente cuando:
-- Corrijas un error que hayas causado
-- Descubras un patrón del codebase útil
-- Aprendas preferencias del usuario
+## Mapeo de Documentación Bajo Demanda
+- Roadmap y requisitos: `./.claude/docs/ROADMAP.md`
+- Errores e Histórico: `./.claude/docs/troubleshooting.md`
+- Documentación General: `./.claude/docs/`

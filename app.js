@@ -28,6 +28,23 @@ function formatCurrency(value) {
     }).format(Number(value || 0));
 }
 
+function formatCurrencyCode(code, amount) {
+    const symbols = {
+        'UYU': '$', 'USD': 'US$', 'BRL': 'R$', 'EUR': '€',
+        'ARS': 'AR$', 'CLP': 'CL$', 'MXN': 'MX$', 'COP': 'CO$', 'PEN': 'S/'
+    };
+    const symbol = symbols[code] || '$';
+    return `${symbol}${Math.round(amount || 0).toLocaleString('es-UY')}`;
+}
+
+function getCurrencySymbol(code) {
+    const symbols = {
+        'UYU': '$', 'USD': 'US$', 'BRL': 'R$', 'EUR': '€',
+        'ARS': 'AR$', 'CLP': 'CL$', 'MXN': 'MX$', 'COP': 'CO$', 'PEN': 'S/'
+    };
+    return symbols[code] || '$';
+}
+
 function formatDate(value) {
     if (!value) return 'Sin fecha';
 
@@ -89,6 +106,7 @@ async function submitExpense(amount, description) {
         description: cleanDescription,
         category: document.getElementById('expenseCategory').value,
         payer: document.getElementById('expensePayer').value,
+        currency: document.getElementById('expenseCurrency').value,
         date: new Date().toISOString().split('T')[0],
         split_mode: splitMode
     };
@@ -248,19 +266,23 @@ function renderHistory(items) {
     updateHistoryCount(items.length);
 
     if (items.length === 0) {
-        historyBody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
         return;
     }
 
     historyBody.innerHTML = items.map(item => {
         const paidBy = payerName(item.payer);
+        const currencyCode = escapeHtml(item.currency || 'UYU');
+        const currencySymbol = getCurrencySymbol(currencyCode);
+        const amountFormatted = `${currencySymbol}${Math.round(item.amount).toLocaleString('es-UY')}`;
+
         let distributionText = '';
 
         if (item.splits && item.splits.length > 0) {
             const meSplit = item.splits.find(s => s.user_id === 'me');
             const partnerSplit = item.splits.find(s => s.user_id === 'partner');
-            const meAmount = meSplit ? formatCurrency(meSplit.amount) : '-';
-            const partnerAmount = partnerSplit ? formatCurrency(partnerSplit.amount) : '-';
+            const meAmountFormatted = meSplit ? `${currencySymbol}${Math.round(meSplit.amount).toLocaleString('es-UY')}` : '-';
+            const partnerAmountFormatted = partnerSplit ? `${currencySymbol}${Math.round(partnerSplit.amount).toLocaleString('es-UY')}` : '-';
 
             if (item.splits.length === 1 && meSplit && meSplit.amount === item.amount) {
                 distributionText = `<span class="history-distribution">Solo pagó ${payerName(item.payer)}</span>`;
@@ -268,16 +290,17 @@ function renderHistory(items) {
                 const other = item.splits[0].user_id === 'me' ? 'Tin' : 'Noe';
                 distributionText = `<span class="history-distribution">Solo ${other}</span>`;
             } else {
-                distributionText = `<span class="distribution-badge">${meAmount} / ${partnerAmount}</span>`;
+                distributionText = `<span class="distribution-badge">${meAmountFormatted} / ${partnerAmountFormatted}</span>`;
             }
         }
-
+        
         return `
             <tr>
                 <td>${escapeHtml(formatDate(item.date))}</td>
                 <td class="fw-medium">${escapeHtml(item.description || 'Sin descripción')}</td>
                 <td><span class="category-pill">${escapeHtml(categoryName(item.category))}</span></td>
-                <td class="text-end fw-semibold">${escapeHtml(formatCurrency(item.amount))}</td>
+                <td class="text-end fw-semibold">${escapeHtml(amountFormatted)}</td>
+                <td><span class="currency-badge">${currencyCode}</span></td>
                 <td><span class="payer-pill payer-${escapeHtml(item.payer || 'unknown')}">${escapeHtml(paidBy)}</span></td>
                 <td><div>${distributionText}</div></td>
                 <td class="text-end history-actions">
@@ -371,7 +394,7 @@ async function fetchHistory() {
     } catch (error) {
         console.error('Error en fetchHistory:', error);
         Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
-        historyBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
     }
 }
 
@@ -388,10 +411,11 @@ function applyHistoryFilters() {
         ].some(value => String(value || '').toLowerCase().includes(query));
 
         const matchesCategory = !historyFilters.category || categoryName(item.category) === historyFilters.category;
+        const matchesCurrency = !historyFilters.currency || (item.currency || 'UYU') === historyFilters.currency;
         const matchesPayer = !historyFilters.payer || item.payer === historyFilters.payer;
         const matchesMonth = !historyFilters.month || (item.date && item.date.startsWith(historyFilters.month));
 
-        return matchesSearch && matchesCategory && matchesPayer && matchesMonth;
+        return matchesSearch && matchesCategory && matchesCurrency && matchesPayer && matchesMonth;
     });
 
     renderHistory(filteredExpenses);
@@ -420,6 +444,20 @@ function setMonthFilter(month) {
 function hydrateHistoryFilterOptions() {
     const categoryFilter = document.getElementById('category-filter');
     const monthFilter = document.getElementById('month-filter');
+    const currencyFilter = document.getElementById('currency-filter');
+
+    if (currencyFilter) {
+        const currencies = Array.from(new Set(allExpenses.map(item => item.currency || 'UYU'))).sort();
+        const selectedCurrency = currencyFilter.value;
+
+        currencyFilter.innerHTML = '<option value="">Todas las monedas</option>' + currencies.map(code => {
+            const symbol = getCurrencySymbol(code);
+            return `<option value="${code}">${symbol || code} - ${code}</option>`;
+        }).join('');
+
+        currencyFilter.value = currencies.includes(selectedCurrency) ? selectedCurrency : '';
+        historyFilters.currency = currencyFilter.value;
+    }
 
     if (categoryFilter) {
         const categories = Array.from(new Set(allExpenses.map(item => categoryName(item.category)))).sort();
@@ -604,6 +642,7 @@ async function editExpense(id) {
         document.getElementById('editAmount').value = expense.amount;
         document.getElementById('editCategory').value = expense.category || 'Otros';
         document.getElementById('editPayer').value = expense.payer || 'me';
+        document.getElementById('editCurrency').value = expense.currency || 'UYU';
 
         if (expense.splits && expense.splits.length > 0) {
             const meSplit = expense.splits.find(s => s.user_id === 'me');
@@ -649,6 +688,7 @@ async function saveExpenseUpdate() {
     const amount = document.getElementById('editAmount').value;
     const category = document.getElementById('editCategory').value;
     const payer = document.getElementById('editPayer').value;
+    const currency = document.getElementById('editCurrency').value;
 
     if (!date) {
         Swal.fire('Atenci\u00f3n', 'La fecha es obligatoria.', 'warning');
@@ -674,6 +714,7 @@ async function saveExpenseUpdate() {
         amount: parsedAmount,
         category,
         payer,
+        currency: currency || 'UYU',
         split_mode: splitMode
     };
 
@@ -803,6 +844,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (monthFilter) {
         monthFilter.addEventListener('change', event => {
             setMonthFilter(event.target.value);
+        });
+    }
+
+    const currencyFilter = document.getElementById('currency-filter');
+    if (currencyFilter) {
+        currencyFilter.addEventListener('change', event => {
+            historyFilters.currency = event.target.value;
+            applyHistoryFilters();
         });
     }
 
