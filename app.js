@@ -3,6 +3,7 @@ const defaultTheme = 'github';
 let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;
+let isSubmittingPayment = false;
 let historyFilters = {
     search: '',
     category: '',
@@ -12,6 +13,7 @@ let historyFilters = {
 
 let currentUser = null;
 let currentSplitMode = 'equal';
+let allPayments = [];
 
 document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
 
@@ -165,6 +167,142 @@ async function submitExpense(amount, description) {
     } finally {
         setSubmitState(false);
     }
+}
+
+async function submitPayment(amount, description) {
+    if (isSubmittingPayment) return;
+
+    const parsedAmount = parseFloat(amount);
+    const cleanDescription = description ? description.trim() : '';
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        Swal.fire('Atención', 'El monto debe ser un número válido mayor a cero.', 'warning');
+        return;
+    }
+
+    const paymentData = {
+        amount: parsedAmount,
+        description: cleanDescription,
+        currency: document.getElementById('paymentCurrencyInline').value,
+        date: document.getElementById('paymentDateInline').value,
+        from_user: document.getElementById('paymentFromInline').value,
+        to_user: document.getElementById('paymentToInline').value
+    };
+
+    if (!paymentData.date || !/^\d{4}-\d{2}-\d{2}$/.test(paymentData.date)) {
+        Swal.fire('Atención', 'La fecha es obligatoria y debe tener el formato YYYY-MM-DD.', 'warning');
+        return;
+    }
+
+    if (paymentData.from_user === paymentData.to_user) {
+        Swal.fire('Atención', 'No puedes pagarte a ti mismo.', 'warning');
+        return;
+    }
+
+    isSubmittingPayment = true;
+
+    try {
+        const response = await fetch('/api/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paymentData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error en el servidor');
+        }
+
+        document.getElementById('payment-form-inline').reset();
+        Swal.fire('¡Éxito!', 'Pago registrado con éxito', 'success');
+        await fetchHistory();
+    } catch (err) {
+        console.error('Error de conexión:', err);
+        Swal.fire('Error', err.message || 'Error en el servidor al guardar el pago.', 'error');
+    } finally {
+        isSubmittingPayment = false;
+    }
+}
+
+async function deletePayment(paymentId) {
+    try {
+        const response = await fetch(`/api/payment/${paymentId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Error en el servidor');
+        }
+
+        Swal.fire('¡Eliminado!', 'Pago eliminado correctamente', 'success');
+        await fetchHistory();
+    } catch (err) {
+        console.error('Error de conexión:', err);
+        Swal.fire('Error', err.message || 'Error en el servidor al eliminar el pago.', 'error');
+    }
+}
+
+function renderPayments() {
+    const payments = allPayments;
+    const paymentsBody = document.getElementById('payments-body');
+    const paymentsCount = document.getElementById('payments-count');
+
+    if (!paymentsBody) return;
+
+    if (payments.length === 0) {
+        paymentsBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No hay pagos registrados</td></tr>';
+        if (paymentsCount) paymentsCount.textContent = '0 pagos';
+        return;
+    }
+
+    if (paymentsCount) paymentsCount.textContent = `${payments.length} pago${payments.length !== 1 ? 's' : ''}`;
+
+    let html = '';
+    for (const payment of payments) {
+        const userLabel = payment.from_user === 'me' ? 'Tin' : 'Noe';
+        const toLabel = payment.to_user === 'me' ? 'Tin' : 'Noe';
+        const amountStr = formatCurrencyCode(payment.currency, payment.amount);
+        const desc = payment.description || 'Sin descripción';
+
+        html += `
+            <tr>
+                <td>${formatDate(payment.date)}</td>
+                <td>${desc}</td>
+                <td class="text-end">${amountStr}</td>
+                <td><span class="badge bg-secondary">${payment.currency}</span></td>
+                <td>${userLabel}</td>
+                <td>${toLabel}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-danger payment-delete-btn" data-id="${payment.id}" title="Eliminar pago">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1 -1 0v-6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1 -1 0v-6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0v-6z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h11.5a1 1 0 0 1 1 1zm-2 9v-9H5v9h2a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9h8V3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v9h1a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v1h1a1 1 0 0 0 1-1v-1a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h-1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1V4z"/></svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }
+    paymentsBody.innerHTML = html;
+
+    document.querySelectorAll('.payment-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const paymentId = parseInt(e.target.closest('button').dataset.id);
+            Swal.fire({
+                title: '¿Eliminar pago?',
+                text: 'Esta acción no se puede deshacer.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    deletePayment(paymentId);
+                }
+            });
+        });
+    });
 }
 
 function processCategoryData(data) {
@@ -391,6 +529,8 @@ async function fetchHistory() {
         applyHistoryFilters();
         updateChart(allExpenses);
         updateSummary(data.summary, allExpenses);
+        allPayments = data.payments || [];
+        renderPayments();
     } catch (error) {
         console.error('Error en fetchHistory:', error);
         Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
@@ -972,11 +1112,63 @@ document.addEventListener('DOMContentLoaded', () => {
     if (editSplitMeInput) editSplitMeInput.addEventListener('input', updateEditSplitTotal);
     if (editSplitPartnerInput) editSplitPartnerInput.addEventListener('input', updateEditSplitTotal);
 
+    const paymentFormInline = document.getElementById('payment-form-inline');
+    if (paymentFormInline) {
+        paymentFormInline.addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitPayment(
+                document.getElementById('paymentAmountInline').value,
+                document.getElementById('paymentDescInline').value
+            );
+        });
+    }
+
+    const toggleModeBtn = document.getElementById('toggle-mode-btn');
+    let isPaymentMode = false;
+    if (toggleModeBtn) {
+        toggleModeBtn.addEventListener('click', () => {
+            isPaymentMode = !isPaymentMode;
+            const form = document.getElementById('expense-form');
+            const paymentForm = document.getElementById('payment-form-inline');
+            const formTitle = document.getElementById('form-title');
+            const submitBtn = document.getElementById('submit-expense');
+
+            if (isPaymentMode) {
+                toggleModeBtn.textContent = 'Cambiar a Gasto';
+                formTitle.textContent = 'Registrar pago';
+                submitBtn.textContent = 'Registrar pago';
+                submitBtn.type = 'submit';
+                document.getElementById('expense-form').style.display = 'none';
+                if (paymentForm) {
+                    paymentForm.style.display = '';
+                    document.getElementById('paymentDateInline').value = new Date().toISOString().split('T')[0];
+                }
+            } else {
+                toggleModeBtn.textContent = 'Cambiar a Pago';
+                formTitle.textContent = 'Agregar gasto';
+                submitBtn.textContent = 'Agregar gasto';
+                submitBtn.type = 'submit';
+                document.getElementById('expense-form').style.display = '';
+                if (paymentForm) paymentForm.style.display = 'none';
+            }
+        });
+    }
+
+    const paymentFromSelect = document.getElementById('paymentFromInline');
+    const paymentToSelect = document.getElementById('paymentToInline');
+    if (paymentFromSelect && paymentToSelect) {
+        paymentFromSelect.addEventListener('change', () => {
+            paymentToSelect.value = paymentFromSelect.value === 'me' ? 'partner' : 'me';
+        });
+    }
+
     checkAuth();
 });
 
 window.changeTheme = changeTheme;
 window.submitExpense = submitExpense;
+window.submitPayment = submitPayment;
+window.deletePayment = deletePayment;
 window.logoutUser = logoutUser;
 window.editExpense = editExpense;
 window.deleteExpense = deleteExpense;

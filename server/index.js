@@ -391,15 +391,36 @@ app.get('/api/expenses', async (req, res) => {
 
         const balance = (totalMe - totalPartner) / baseRate;
 
+        // Obtener pagos para ajustar el balance
+        const paymentsResult = await db.execute('SELECT * FROM payments ORDER BY date DESC');
+        let totalPaymentsMe = 0;
+        let totalPaymentsPartner = 0;
+        for (const payment of paymentsResult.rows) {
+            const payRate = currencies[payment.currency] || 1;
+            const amountInBase = payment.amount / payRate;
+            if (payment.from_user === 'me') {
+                totalPaymentsMe += amountInBase;
+            } else {
+                totalPaymentsPartner += amountInBase;
+            }
+        }
+        const adjustedBalance = ((totalMe - totalPartner) - (totalPaymentsMe - totalPaymentsPartner)) / baseRate;
+
         res.json({
             expenses: expensesWithSplits,
             summary: {
                 totalMe: ((totalMe / baseRate)).toFixed(2),
                 totalPartner: ((totalPartner / baseRate)).toFixed(2),
-                balance: balance > 0 ? (balance / 2).toFixed(2) : (Math.abs(balance) / 2).toFixed(2),
-                status: balance > 0 ? "Te deben" : "Le debes",
-                baseCurrency
-            }
+                balance: adjustedBalance > 0 ? (adjustedBalance / 2).toFixed(2) : (Math.abs(adjustedBalance) / 2).toFixed(2),
+                status: adjustedBalance > 0 ? "Te deben" : "Le debes",
+                baseCurrency,
+                payments: {
+                    me: totalPaymentsMe,
+                    partner: totalPaymentsPartner,
+                    net: (totalPaymentsMe - totalPaymentsPartner)
+                }
+            },
+            payments: paymentsResult.rows
         });
     } catch (err) {
         console.error(`[ERROR_QUERY] Fallo al obtener gastos: ${err}`);
@@ -581,6 +602,73 @@ app.put('/api/expense/:id', async (req, res) => {
         res.json({ message: 'Gasto actualizado con éxito' });
     } catch (err) {
         console.error(`[ERROR_DB] Fallo al actualizar gasto: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// Payment endpoints
+app.get('/api/payments', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM payments ORDER BY date DESC, created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`[PAYMENTS] Error: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.post('/api/payment', async (req, res) => {
+    const { from_user, to_user, amount, currency, date, description } = req.body;
+    const parsedAmount = parseFloat(amount);
+    const cleanDescription = description ? description.trim() : '';
+
+    const validCurrencies = ['UYU', 'USD', 'BRL', 'EUR', 'ARS', 'CLP', 'MXN', 'COP', 'PEN'];
+    const validCurrency = currency && validCurrencies.includes(currency.toUpperCase());
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+    }
+    if (!from_user || !['me', 'partner'].includes(from_user)) {
+        return res.status(400).json({ error: 'Debes especificar el usuario que paga' });
+    }
+    if (!to_user || !['me', 'partner'].includes(to_user)) {
+        return res.status(400).json({ error: 'Debes especificar el usuario que recibe' });
+    }
+    if (from_user === to_user) {
+        return res.status(400).json({ error: 'No puedes pagarte a ti mismo' });
+    }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Fecha inválida' });
+    }
+    if (!validCurrency) {
+        return res.status(400).json({ error: 'Moneda inválida (por defecto UYU)' });
+    }
+
+    try {
+        const currencyCode = validCurrency ? currency.toUpperCase() : 'UYU';
+        const result = await db.execute({
+            sql: 'INSERT INTO payments (from_user, to_user, amount, currency, date, description) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [from_user, to_user, parsedAmount, currencyCode, date, cleanDescription]
+        });
+        const paymentId = result.lastInsertRowid;
+        console.log(`[ÉXITO] Pago registrado: ${from_user} -> ${to_user} - $${parsedAmount} (${currencyCode})`);
+        res.json({ id: Number(paymentId), message: 'Pago registrado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al registrar pago: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.delete('/api/payment/:id', async (req, res) => {
+    try {
+        const result = await db.execute('DELETE FROM payments WHERE id = ?', [req.params.id]);
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Pago no encontrado' });
+        }
+        console.log(`[ÉXITO] Pago eliminado: ${req.params.id}`);
+        res.json({ message: 'Pago eliminado con éxito' });
+    } catch (err) {
+        console.error(`[ERROR_DB] Fallo al eliminar pago: ${err}`);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });

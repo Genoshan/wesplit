@@ -274,6 +274,10 @@ body {
     margin-bottom: 18px;
 }
 
+#toggle-mode-btn {
+    margin-top: 8px;
+}
+
 .section-heading h2 {
     font-size: 1.25rem;
     font-weight: 720;
