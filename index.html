@@ -128,6 +128,19 @@
                             <option value="partner">Noe</option>
                         </select>
 
+                        <label for="expenseCurrency">Moneda</label>
+                        <select id="expenseCurrency" class="form-select">
+                            <option value="UYU">UYU - Peso uruguayo ($)</option>
+                            <option value="USD">USD - Dólar (US$)</option>
+                            <option value="BRL">BRL - Real brasileño (R$)</option>
+                            <option value="EUR">EUR - Euro (€)</option>
+                            <option value="ARS">ARS - Peso argentino (AR$)</option>
+                            <option value="CLP">CLP - Peso chileno (CL$)</option>
+                            <option value="MXN">MXN - Peso mexicano (MX$)</option>
+                            <option value="COP">COP - Peso colombiano (CO$)</option>
+                            <option value="PEN">PEN - Sol peruano (S/)</option>
+                        </select>
+
                         <label>Split</label>
                         <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división">
                             <label class="split-option">
@@ -188,6 +201,9 @@
                             <option value="Servicios">Servicios</option>
                             <option value="Otros">Otros</option>
                         </select>
+                        <select id="currency-filter" class="form-select filter-select" aria-label="Filtrar por moneda">
+                            <option value="">Todas las monedas</option>
+                        </select>
                         <select id="payer-filter" class="form-select filter-select" aria-label="Filtrar por pagador">
                             <option value="">Todos los pagadores</option>
                             <option value="me">Tin</option>
@@ -206,6 +222,7 @@
                                     <th class="text-start">Descripción</th>
                                     <th class="text-start">Categoría</th>
                                     <th class="text-end">Monto</th>
+                                    <th class="text-start">Moneda</th>
                                     <th class="text-start">Pagador</th>
                                     <th class="text-start">Distribuye</th>
                                     <th class="text-end">Acciones</th>
@@ -213,7 +230,7 @@
                             </thead>
                             <tbody id="history-body">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Cargando historial...</td>
+                                    <td colspan="8" class="text-center text-muted py-4">Cargando historial...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -337,6 +354,21 @@
                                 <select id="editPayer" class="form-select" required>
                                     <option value="me">Tin</option>
                                     <option value="partner">Noe</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="editCurrency" class="form-label">Moneda</label>
+                                <select id="editCurrency" class="form-select">
+                                    <option value="UYU">UYU - Peso uruguayo ($)</option>
+                                    <option value="USD">USD - Dólar (US$)</option>
+                                    <option value="BRL">BRL - Real brasileño (R$)</option>
+                                    <option value="EUR">EUR - Euro (€)</option>
+                                    <option value="ARS">ARS - Peso argentino (AR$)</option>
+                                    <option value="CLP">CLP - Peso chileno (CL$)</option>
+                                    <option value="MXN">MXN - Peso mexicano (MX$)</option>
+                                    <option value="COP">COP - Peso colombiano (CO$)</option>
+                                    <option value="PEN">PEN - Sol peruano (S/)</option>
                                 </select>
                             </div>
 

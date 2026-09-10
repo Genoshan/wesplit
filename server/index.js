@@ -278,12 +278,82 @@ app.get('/api/auth/check', (req, res) => {
     res.json({ user: user.username, payer: user.payer });
 });
 
+// Listado de monedas - público (antes del auth)
+app.get('/api/currencies', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT * FROM currencies ORDER BY is_default DESC, code ASC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(`[CURRENCIES] Error: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
 // Auth middleware + rate limit para el resto de la API
 app.use('/api', apiLimiter);
 app.use('/api', authMiddleware);
 
+app.post('/api/currencies', async (req, res) => {
+    const { code, name, rate, symbol, is_default } = req.body;
+    if (!code || !name || rate === undefined || !symbol) {
+        return res.status(400).json({ error: 'Faltan campos requeridos (code, name, rate, symbol)' });
+    }
+    try {
+        if (is_default) {
+            await db.execute('UPDATE currencies SET is_default = 0');
+        }
+        const result = await db.execute({
+            sql: 'INSERT INTO currencies (code, name, rate, symbol, is_default) VALUES (?, ?, ?, ?, ?)',
+            args: [code.toUpperCase(), name, parseFloat(rate), symbol, is_default ? 1 : 0]
+        });
+        console.log(`[CURRENCY] Agregada: ${code} (${name})`);
+        res.json({ id: Number(result.lastInsertRowid), message: `Moneda ${code} agregada` });
+    } catch (err) {
+        console.error(`[CURRENCY] Error: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.put('/api/currencies/:code', async (req, res) => {
+    const { name, rate, symbol } = req.body;
+    try {
+        await db.execute(
+            'UPDATE currencies SET name = ?, rate = ?, symbol = ? WHERE code = ?',
+            [name, parseFloat(rate), symbol, req.params.code.toUpperCase()]
+        );
+        res.json({ message: 'Moneda actualizada' });
+    } catch (err) {
+        console.error(`[CURRENCY] Error: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+app.delete('/api/currencies/:code', async (req, res) => {
+    const code = req.params.code.toUpperCase();
+    try {
+        const check = await db.execute('SELECT * FROM currencies WHERE code = ?', [code]);
+        if (check.rows.length === 0) {
+            return res.status(404).json({ error: 'Moneda no encontrada' });
+        }
+        await db.execute('DELETE FROM currencies WHERE code = ?', [code]);
+        res.json({ message: `Moneda ${code} eliminada` });
+    } catch (err) {
+        console.error(`[CURRENCY] Error: ${err}`);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
 app.get('/api/expenses', async (req, res) => {
     try {
+        const currenciesResult = await db.execute('SELECT * FROM currencies ORDER BY is_default DESC, code ASC');
+        const currencies = {};
+        let baseCurrency = 'UYU';
+        currenciesResult.rows.forEach(c => {
+            currencies[c.code] = c.rate;
+            if (c.is_default) baseCurrency = c.code;
+        });
+        if (!currencies[baseCurrency]) baseCurrency = 'UYU';
+
         const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
         const rows = result.rows;
 
@@ -301,26 +371,34 @@ app.get('/api/expenses', async (req, res) => {
             };
         }));
 
+        const baseRate = currencies[baseCurrency] || 1;
+
         let totalMe = 0;
         let totalPartner = 0;
 
         expensesWithSplits.forEach(expense => {
+            const currencyRate = (currencies[expense.currency] || 1);
+            const amountInBase = expense.amount / currencyRate;
+            const meShareBase = (expense.meShare / currencyRate);
+            const partnerShareBase = (expense.partnerShare / currencyRate);
+
             if (expense.payer === 'me') {
-                totalMe += (expense.amount - expense.meShare);
+                totalMe += amountInBase - meShareBase;
             } else {
-                totalPartner += (expense.amount - expense.partnerShare);
+                totalPartner += amountInBase - partnerShareBase;
             }
         });
 
-        const balance = totalMe - totalPartner;
+        const balance = (totalMe - totalPartner) / baseRate;
 
         res.json({
             expenses: expensesWithSplits,
             summary: {
-                totalMe,
-                totalPartner,
+                totalMe: ((totalMe / baseRate)).toFixed(2),
+                totalPartner: ((totalPartner / baseRate)).toFixed(2),
                 balance: balance > 0 ? (balance / 2).toFixed(2) : (Math.abs(balance) / 2).toFixed(2),
-                status: balance > 0 ? "Te deben" : "Le debes"
+                status: balance > 0 ? "Te deben" : "Le debes",
+                baseCurrency
             }
         });
     } catch (err) {
@@ -348,13 +426,14 @@ app.get('/api/expense/:id', async (req, res) => {
 });
 
 app.post('/api/expense', async (req, res) => {
-    const { date, description, amount, payer, category, split_mode, splits } = req.body;
+    const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
 
     const validPayers = ['me', 'partner'];
     const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
     const validSplitModes = ['equal', 'solo', 'custom'];
+    const validCurrency = currency && ['UYU', 'USD', 'BRL', 'EUR', 'ARS', 'CLP', 'MXN', 'COP', 'PEN'].includes(currency.toUpperCase());
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
         console.warn(`[VALIDACIÓN] Monto inválido recibido`);
@@ -375,6 +454,9 @@ app.post('/api/expense', async (req, res) => {
     if (!split_mode || !validSplitModes.includes(split_mode)) {
         return res.status(400).json({ error: 'Modo de división inválido' });
     }
+    if (!validCurrency) {
+        return res.status(400).json({ error: 'Moneda inválida (por defecto UYU)' });
+    }
 
     let splitAmounts = [];
     if (split_mode === 'equal') {
@@ -393,9 +475,10 @@ app.post('/api/expense', async (req, res) => {
     }
 
     try {
+        const currencyCode = validCurrency ? currency.toUpperCase() : 'UYU';
         const result = await db.execute({
-            sql: 'INSERT INTO expenses (date, description, amount, payer, category) VALUES (?, ?, ?, ?, ?)',
-            args: [date, cleanDescription, parsedAmount, payer, category],
+            sql: 'INSERT INTO expenses (date, description, amount, payer, category, currency) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [date, cleanDescription, parsedAmount, payer, category, currencyCode],
         });
         const expenseId = result.lastInsertRowid;
 
@@ -429,13 +512,14 @@ app.delete('/api/expense/:id', async (req, res) => {
 });
 
 app.put('/api/expense/:id', async (req, res) => {
-    const { date, description, amount, payer, category, split_mode, splits } = req.body;
+    const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
     const cleanDescription = description ? description.trim() : '';
     const parsedAmount = parseFloat(amount);
 
     const validPayers = ['me', 'partner'];
     const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
     const validSplitModes = ['equal', 'solo', 'custom'];
+    const validCurrency = currency && ['UYU', 'USD', 'BRL', 'EUR', 'ARS', 'CLP', 'MXN', 'COP', 'PEN'].includes(currency.toUpperCase());
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ error: 'El monto debe ser un número positivo' });
@@ -478,9 +562,10 @@ app.put('/api/expense/:id', async (req, res) => {
             return res.status(404).json({ error: 'Gasto no encontrado' });
         }
 
+        const currencyCode = validCurrency ? currency.toUpperCase() : 'UYU';
         await db.execute(
-            'UPDATE expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ? WHERE id = ?',
-            [date, cleanDescription, parsedAmount, payer, category, req.params.id]
+            'UPDATE expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ?, currency = ? WHERE id = ?',
+            [date, cleanDescription, parsedAmount, payer, category, currencyCode, req.params.id]
         );
 
         await db.execute('DELETE FROM expense_splits WHERE expense_id = ?', [req.params.id]);
