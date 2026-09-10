@@ -312,6 +312,18 @@ body {
     width: 100%;
 }
 
+.date-filter {
+    width: 100%;
+    min-width: 140px;
+}
+
+#export-csv-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
 .form-container {
     display: flex;
     flex-direction: column;
