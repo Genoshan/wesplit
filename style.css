@@ -56,6 +56,31 @@
     --owe-color: #ff652f;
 }
 
+/* Tabs: contrast fix for dark theme */
+.app-tabs {
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.app-tabs .nav-link {
+    color: var(--text-secondary);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    font-weight: 500;
+}
+
+.app-tabs .nav-link:hover {
+    color: var(--text-primary);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.app-tabs .nav-link.active {
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
+    background: transparent;
+    font-weight: 600;
+}
+
 /* Fix Bootstrap table colors in dark themes */
 [data-bs-theme="dracula"] .table,
 [data-bs-theme="nord"] .table {
