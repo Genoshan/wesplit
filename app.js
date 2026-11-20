@@ -9,11 +9,30 @@ let currentGroupId = null;
 let currentGroupName = null;
 let currentSplitMode = 'equal';
 
-document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
+const initialTheme = localStorage.getItem(themeKey) || defaultTheme;
+document.documentElement.setAttribute('data-bs-theme', initialTheme);
+// Update toggle button after DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+    updateThemeToggle(initialTheme);
+});
 
 function changeTheme(theme) {
     document.documentElement.setAttribute('data-bs-theme', theme);
     localStorage.setItem(themeKey, theme);
+    updateThemeToggle(theme);
+}
+
+function toggleTheme() {
+    const current = localStorage.getItem(themeKey) || defaultTheme;
+    const next = current === 'splitwise' ? 'splitwise-dark' : 'splitwise';
+    changeTheme(next);
+}
+
+function updateThemeToggle(theme) {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    btn.textContent = theme === 'splitwise-dark' ? '🌙' : '☀️';
+    btn.title = theme === 'splitwise-dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
 }
 
 function formatCurrency(value) {
