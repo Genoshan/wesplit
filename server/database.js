@@ -204,6 +204,19 @@ async function initDB() {
         await db.execute('UPDATE users SET name = ? WHERE username = ? AND (name IS NULL OR name = \'\')', [u.name, u.username]);
     }
 
+    // Migración: vincular los emails de Google de los usuarios de prueba
+    // para que sigan ingresando a sus cuentas existentes (y no creen otras nuevas)
+    const legacyGoogleEmails = [
+        { username: 'tin', email: 'argordster@gmail.com' },
+        { username: 'noe', email: 'mnovoapacilio@gmail.com' },
+    ];
+    for (const item of legacyGoogleEmails) {
+        await db.execute(
+            'UPDATE users SET email = ? WHERE username = ? AND (email IS NULL OR email = \'\')',
+            [item.email, item.username]
+        );
+    }
+
     // ────────────────────────────────────────
     // Seed: grupo por defecto "Casa"
     // ────────────────────────────────────────
