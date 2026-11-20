@@ -96,9 +96,24 @@ function renderGroupSelector() {
             selector.onchange = () => {
                 currentGroupId = parseInt(selector.value);
                 loadExpenses();
+                updateDeleteButton();
             };
+            // Show delete button only if admin of current group
+            updateDeleteButton(data.groups);
         })
         .catch(e => console.error('[APP] Group selector error:', e));
+}
+
+function updateDeleteButton(groups) {
+    const btn = document.getElementById('delete-group-btn');
+    if (!btn) return;
+    if (!groups) {
+        fetch('/api/auth/check').then(r => r.json()).then(d => updateDeleteButton(d.groups)).catch(() => {});
+        return;
+    }
+    const current = groups.find(g => g.id == currentGroupId);
+    const isAdmin = current && current.member_role === 'admin';
+    btn.hidden = !isAdmin;
 }
 
 function openCreateGroupModal() {
@@ -121,6 +136,33 @@ async function confirmCreateGroup() {
         currentGroupName = name;
         const modal = bootstrap.Modal.getInstance(document.getElementById('createGroupModal'));
         modal.hide();
+        await loadAuth();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+function openDeleteGroupModal() {
+    document.getElementById('delete-group-name').textContent = currentGroupName || 'este grupo';
+    const modal = new bootstrap.Modal(document.getElementById('deleteGroupModal'));
+    modal.show();
+}
+
+async function confirmDeleteGroup() {
+    if (!currentGroupId) return;
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}`);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteGroupModal'));
+        modal.hide();
+        // Switch to first available group
+        const data = await apiGet('/api/auth/check');
+        if (data.groups && data.groups.length > 0) {
+            currentGroupId = data.defaultGroup ? data.defaultGroup.id : data.groups[0].id;
+            currentGroupName = data.defaultGroup ? data.defaultGroup.name : data.groups[0].name;
+        } else {
+            currentGroupId = null;
+            currentGroupName = null;
+        }
         await loadAuth();
     } catch (err) {
         alert('Error: ' + err.message);
@@ -426,6 +468,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // New group button
     document.getElementById('new-group-btn')?.addEventListener('click', openCreateGroupModal);
     document.getElementById('confirm-create-group')?.addEventListener('click', confirmCreateGroup);
+    // Delete group button
+    document.getElementById('delete-group-btn')?.addEventListener('click', openDeleteGroupModal);
+    document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
 
     // Load
     loadAuth();
