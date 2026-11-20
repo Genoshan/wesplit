@@ -95,8 +95,10 @@ function renderGroupSelector() {
             ).join('');
             selector.onchange = () => {
                 currentGroupId = parseInt(selector.value);
+                const selected = data.groups.find(g => g.id == currentGroupId);
+                currentGroupName = selected ? selected.name : null;
                 loadExpenses();
-                updateDeleteButton();
+                updateDeleteButton(data.groups);
             };
             // Show delete button only if admin of current group
             updateDeleteButton(data.groups);
@@ -143,7 +145,10 @@ async function confirmCreateGroup() {
 }
 
 function openDeleteGroupModal() {
-    document.getElementById('delete-group-name').textContent = currentGroupName || 'este grupo';
+    const selector = document.getElementById('group-selector');
+    const selectedOption = selector ? selector.options[selector.selectedIndex] : null;
+    const name = selectedOption ? selectedOption.text : (currentGroupName || 'este grupo');
+    document.getElementById('delete-group-name').textContent = name;
     const modal = new bootstrap.Modal(document.getElementById('deleteGroupModal'));
     modal.show();
 }
