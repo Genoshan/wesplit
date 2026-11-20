@@ -129,7 +129,7 @@ async function confirmCreateGroup() {
     const name = document.getElementById('new-group-name').value.trim();
     const currency = document.getElementById('new-group-currency').value;
     if (!name) {
-        alert('El nombre es requerido');
+        Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'Ingresá un nombre para el grupo.' });
         return;
     }
     try {
@@ -140,7 +140,7 @@ async function confirmCreateGroup() {
         modal.hide();
         await loadAuth();
     } catch (err) {
-        alert('Error: ' + err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     }
 }
 
@@ -170,7 +170,7 @@ async function confirmDeleteGroup() {
         }
         await loadAuth();
     } catch (err) {
-        alert('Error: ' + err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     }
 }
 
@@ -254,23 +254,30 @@ async function renderMembers() {
 async function addMember() {
     const username = document.getElementById('new-member-username')?.value?.trim();
     const role = document.getElementById('new-member-role')?.value || 'member';
-    if (!username) { alert('Ingresá un username'); return; }
+    if (!username) { Swal.fire({ icon: 'warning', title: 'Username requerido', text: 'Ingresá un username para el miembro.' }); return; }
     try {
         await apiPost(`/api/groups/${currentGroupId}/members`, { username, role });
         document.getElementById('new-member-username').value = '';
         await renderMembers();
     } catch (err) {
-        alert('Error: ' + err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     }
 }
 
 async function removeMember(userId) {
-    if (!confirm('¿Eliminar este miembro?')) return;
+    const result = await Swal.fire({
+        title: '¿Eliminar este miembro?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!result.isConfirmed) return;
     try {
         await apiDelete(`/api/groups/${currentGroupId}/members/${userId}`);
         await renderMembers();
     } catch (err) {
-        alert('Error: ' + err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     }
 }
 
@@ -317,20 +324,27 @@ async function addExpense(formData) {
         document.getElementById('expense-amount').value = '';
     } catch (err) {
         console.error('[APP] Failed to add expense:', err);
-        alert(err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     } finally {
         isSubmittingExpense = false;
     }
 }
 
 async function deleteExpense(expenseId) {
-    if (!confirm('¿Eliminar este gasto?')) return;
+    const result = await Swal.fire({
+        title: '¿Eliminar este gasto?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!result.isConfirmed) return;
     try {
         await apiDelete(`/api/groups/${currentGroupId}/expenses/${expenseId}`);
         await loadExpenses();
     } catch (err) {
         console.error('[APP] Failed to delete expense:', err);
-        alert(err.message);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
     }
 }
 
