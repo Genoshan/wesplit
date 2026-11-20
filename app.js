@@ -288,16 +288,37 @@ async function renderMembers() {
     }
 }
 
-async function addMember() {
-    const username = document.getElementById('new-member-username')?.value?.trim();
-    const role = document.getElementById('new-member-role')?.value || 'member';
-    if (!username) { Swal.fire({ icon: 'warning', title: 'Username requerido', text: 'Ingresá un username para el miembro.' }); return; }
+function openInviteModal() {
+    const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
+    document.getElementById('invite-username').value = '';
+    document.getElementById('invite-result').innerHTML = '';
+    const link = `${window.location.origin}?invite=${currentGroupId}`;
+    document.getElementById('invite-link').value = link;
+    modal.show();
+}
+
+async function confirmInvite() {
+    const username = document.getElementById('invite-username').value.trim();
+    const resultEl = document.getElementById('invite-result');
+    if (!username) {
+        Swal.fire({ icon: 'warning', title: 'Username requerido', text: 'Ingresá un username.' });
+        return;
+    }
     try {
-        await apiPost(`/api/groups/${currentGroupId}/members`, { username, role });
-        document.getElementById('new-member-username').value = '';
+        await apiPost(`/api/groups/${currentGroupId}/members`, { username, role: 'member' });
+        resultEl.innerHTML = '<p class="text-success small">✅ Usuario agregado al grupo.</p>';
         await renderMembers();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        if (err.message.includes('no encontrado') || err.message.includes('404')) {
+            const link = `${window.location.origin}?invite=${currentGroupId}`;
+            resultEl.innerHTML = `<p class="text-warning small">⚠️ El usuario no existe. Compartí este link para que se registre:</p>
+                <div class="input-group input-group-sm mt-1">
+                    <input type="text" class="form-control" value="${link}" readonly>
+                    <button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('${link}')">Copiar</button>
+                </div>`;
+        } else {
+            resultEl.innerHTML = `<p class="text-danger small">❌ ${err.message}</p>`;
+        }
     }
 }
 
@@ -613,6 +634,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delete-group-menu-btn')?.addEventListener('click', openDeleteGroupModal);
     document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
 
+    // Invite member button
+    document.getElementById('invite-member-btn')?.addEventListener('click', openInviteModal);
+    document.getElementById('confirm-invite')?.addEventListener('click', confirmInvite);
+    document.getElementById('copy-invite-link')?.addEventListener('click', () => {
+        const link = document.getElementById('invite-link').value;
+        navigator.clipboard.writeText(link).then(() => {
+            Swal.fire({ icon: 'success', title: 'Copiado', text: 'Link copiado al portapapeles.', timer: 1500, showConfirmButton: false });
+        });
+    });
+
     // Profile button
     document.getElementById('profile-btn')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('profileModal'));
@@ -651,6 +682,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Check for invite param
+    const params = new URLSearchParams(window.location.search);
+    const inviteGroup = params.get('invite');
+    if (inviteGroup) {
+        const loginError = document.getElementById('login-error');
+        if (loginError) {
+            loginError.textContent = 'Te invitaron a un grupo. Registrate para unirte.';
+            loginError.className = 'text-info small';
+        }
+        // Auto-open register modal
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('registerModal'));
+            modal.show();
+        }, 500);
+    }
+
     // Show register modal
     document.getElementById('show-register-btn')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('registerModal'));
@@ -674,11 +721,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            await apiPost('/api/register', { username, password, email: email || undefined });
+            const params = new URLSearchParams(window.location.search);
+            const inviteGroup = params.get('invite');
+            await apiPost('/api/register', { username, password, email, invite_group: inviteGroup || undefined });
             const modal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
             modal.hide();
-            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' });
+            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' + (inviteGroup ? ' Fuiste agregado al grupo invitado.' : '') });
             document.getElementById('login-username').value = username;
+            // Clear invite param from URL
+            if (inviteGroup) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
         } catch (err) {
             Swal.fire({ icon: 'error', title: 'Error', text: err.message });
         }
