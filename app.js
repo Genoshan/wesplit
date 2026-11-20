@@ -68,8 +68,12 @@ async function loadAuth() {
     }
 }
 
-function logout() {
-    document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+async function logout() {
+    try {
+        await fetch('/api/logout', { method: 'POST' });
+    } catch (e) {
+        console.error('[APP] Logout error:', e);
+    }
     window.location.reload();
 }
 
