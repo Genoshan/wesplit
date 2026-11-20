@@ -101,6 +101,21 @@ function renderGroupSelector() {
         .catch(e => console.error('[APP] Group selector error:', e));
 }
 
+async function createGroup() {
+    const name = prompt('Nombre del nuevo grupo:');
+    if (!name || !name.trim()) return;
+    const currency = prompt('Moneda base (UYU, USD, EUR, etc.):', 'UYU') || 'UYU';
+    try {
+        const result = await apiPost('/api/groups', { name: name.trim(), base_currency: currency.toUpperCase() });
+        currentGroupId = result.id;
+        currentGroupName = name.trim();
+        await loadAuth();
+        alert(`Grupo "${name.trim()}" creado con éxito`);
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
 // ── Expenses ──
 async function loadExpenses() {
     if (!currentGroupId) return;
@@ -396,6 +411,9 @@ document.addEventListener('DOMContentLoaded', () => {
         historyFilters.month = e.target.value;
         renderExpenses();
     });
+
+    // New group button
+    document.getElementById('new-group-btn')?.addEventListener('click', createGroup);
 
     // Load
     loadAuth();
