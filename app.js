@@ -62,6 +62,12 @@ async function apiDelete(url) {
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
 }
+async function apiDeleteWithBody(url, body) {
+    const res = await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+}
 async function apiPut(url, body) {
     const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
@@ -631,17 +637,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Profile button
     document.getElementById('profile-btn')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+        document.getElementById('profile-current-password').value = '';
         document.getElementById('profile-email').value = '';
         document.getElementById('profile-password').value = '';
         modal.show();
     });
     document.getElementById('confirm-profile')?.addEventListener('click', async () => {
+        const currentPassword = document.getElementById('profile-current-password').value;
         const email = document.getElementById('profile-email').value.trim();
         const password = document.getElementById('profile-password').value;
-        const body = {};
+        const body = { current_password: currentPassword };
         if (email) body.email = email;
         if (password) body.password = password;
-        if (Object.keys(body).length === 0) {
+        if (!email && !password) {
             Swal.fire({ icon: 'info', title: 'Sin cambios', text: 'No se modificó ningún campo.' });
             return;
         }
@@ -650,6 +658,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
             modal.hide();
             Swal.fire({ icon: 'success', title: 'Perfil actualizado', text: 'Los cambios se guardaron correctamente.' });
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        }
+    });
+
+    // Delete account button
+    document.getElementById('delete-account-btn')?.addEventListener('click', async () => {
+        const currentPassword = document.getElementById('profile-current-password').value;
+        if (!currentPassword) {
+            Swal.fire({ icon: 'warning', title: 'Contraseña requerida', text: 'Ingresá tu contraseña actual para eliminar la cuenta.' });
+            return;
+        }
+        const result = await Swal.fire({
+            title: '¿Eliminar tu cuenta?',
+            text: 'Se eliminarán todos tus datos, grupos y gastos. Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d33'
+        });
+        if (!result.isConfirmed) return;
+        try {
+            await apiDeleteWithBody('/api/profile', { current_password: currentPassword });
+            const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+            modal.hide();
+            Swal.fire({ icon: 'success', title: 'Cuenta eliminada', text: 'Tu cuenta fue eliminada.' }).then(() => {
+                window.location.reload();
+            });
         } catch (err) {
             Swal.fire({ icon: 'error', title: 'Error', text: err.message });
         }

@@ -296,10 +296,14 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
+                    <label for="profile-current-password">Contraseña actual</label>
+                    <input type="password" id="profile-current-password" class="form-control mb-3" placeholder="Requerida para cambios" required>
                     <label for="profile-email">Email</label>
                     <input type="email" id="profile-email" class="form-control mb-3" placeholder="tu@email.com">
                     <label for="profile-password">Nueva contraseña (opcional)</label>
-                    <input type="password" id="profile-password" class="form-control" placeholder="Dejar vacío para no cambiar">
+                    <input type="password" id="profile-password" class="form-control mb-3" placeholder="Dejar vacío para no cambiar">
+                    <hr>
+                    <button type="button" class="btn btn-sm btn-outline-danger w-100" id="delete-account-btn">🗑️ Eliminar mi cuenta</button>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>

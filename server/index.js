@@ -73,6 +73,11 @@ app.post('/api/register', async (req, res) => {
         if (existing.rows.length > 0) {
             return res.status(409).json({ error: 'El username ya existe' });
         }
+        // Verificar unicidad de email
+        const existingEmail = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+        if (existingEmail.rows.length > 0) {
+            return res.status(409).json({ error: 'El email ya está en uso' });
+        }
 
         // Hash simple
         let hash = 0;
@@ -123,11 +128,40 @@ app.put('/api/profile', async (req, res) => {
         return res.status(401).json({ error: 'No autenticado' });
     }
 
-    const { email, password } = req.body;
+    const { email, password, current_password } = req.body;
+
+    // Verificar contraseña actual si se quiere cambiar email o password
+    if (email !== undefined || password) {
+        if (!current_password) {
+            return res.status(400).json({ error: 'Se requiere la contraseña actual para hacer cambios' });
+        }
+        // Verificar contraseña actual
+        const userRow = await db.execute('SELECT password_hash FROM users WHERE id = ?', [user.id]);
+        if (userRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        const storedHash = userRow.rows[0].password_hash;
+        let hash = 0;
+        for (let i = 0; i < current_password.length; i++) {
+            const ch = current_password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + ch;
+            hash = hash & hash;
+        }
+        const currentHash = 'simple:' + Math.abs(hash).toString(16);
+        if (storedHash !== currentHash) {
+            return res.status(403).json({ error: 'Contraseña actual incorrecta' });
+        }
+    }
+
     try {
         if (email !== undefined) {
             if (!email || !email.includes('@')) {
                 return res.status(400).json({ error: 'Email inválido' });
+            }
+            // Verificar unicidad de email
+            const existing = await db.execute('SELECT id FROM users WHERE email = ? AND id != ?', [email, user.id]);
+            if (existing.rows.length > 0) {
+                return res.status(409).json({ error: 'El email ya está en uso' });
             }
             await db.execute('UPDATE users SET email = ? WHERE id = ?', [email, user.id]);
         }
@@ -147,6 +181,77 @@ app.put('/api/profile', async (req, res) => {
         res.json({ message: 'Perfil actualizado con éxito' });
     } catch (err) {
         console.error('[PROFILE] Error:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// Eliminar cuenta de usuario
+app.delete('/api/profile', async (req, res) => {
+    const cookies = {};
+    if (req.headers.cookie) {
+        req.headers.cookie.split(';').forEach(pair => {
+            const [key, ...rest] = pair.split('=');
+            cookies[key.trim()] = rest.join('=').trim();
+        });
+    }
+    const user = await getUser(cookies['session_token']);
+    if (!user) {
+        return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const { current_password } = req.body || {};
+    if (!current_password) {
+        return res.status(400).json({ error: 'Se requiere la contraseña actual para eliminar la cuenta' });
+    }
+
+    try {
+        // Verificar contraseña
+        const userRow = await db.execute('SELECT password_hash FROM users WHERE id = ?', [user.id]);
+        if (userRow.rows.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        const storedHash = userRow.rows[0].password_hash;
+        let hash = 0;
+        for (let i = 0; i < current_password.length; i++) {
+            const ch = current_password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + ch;
+            hash = hash & hash;
+        }
+        const currentHash = 'simple:' + Math.abs(hash).toString(16);
+        if (storedHash !== currentHash) {
+            return res.status(403).json({ error: 'Contraseña incorrecta' });
+        }
+
+        // Limpiar datos huérfanos
+        // 1. Eliminar membresías del usuario
+        await db.execute('DELETE FROM group_members WHERE user_id = ?', [user.id]);
+        // 2. Eliminar grupos cuyo owner es este usuario (y sus datos)
+        const ownedGroups = await db.execute('SELECT id FROM groups WHERE owner_id = ?', [user.id]);
+        for (const g of ownedGroups.rows) {
+            await db.execute('DELETE FROM group_splits WHERE expense_id IN (SELECT id FROM group_expenses WHERE group_id = ?)', [g.id]);
+            await db.execute('DELETE FROM group_expenses WHERE group_id = ?', [g.id]);
+            await db.execute('DELETE FROM group_members WHERE group_id = ?', [g.id]);
+            await db.execute('DELETE FROM group_payments WHERE group_id = ?', [g.id]);
+            await db.execute('DELETE FROM groups WHERE id = ?', [g.id]);
+        }
+        // 3. Eliminar sesiones
+        await db.execute('DELETE FROM sessions WHERE user_id = ?', [user.id]);
+        // 4. Eliminar usuario
+        await db.execute('DELETE FROM users WHERE id = ?', [user.id]);
+
+        // Limpiar cookie
+        res.cookie('session_token', '', {
+            httpOnly: true,
+            sameSite: 'strict',
+            path: '/',
+            expires: new Date(0),
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        console.log(`[DELETE USER] Usuario ${user.username} (ID: ${user.id}) eliminado`);
+        res.json({ message: 'Cuenta eliminada con éxito' });
+    } catch (err) {
+        console.error('[DELETE USER] Error:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
