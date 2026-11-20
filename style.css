@@ -501,12 +501,14 @@ body {
 
 .chart-area {
     position: relative;
-    min-height: 320px;
+    max-width: 400px;
+    margin: 0 auto;
+    min-height: 280px;
 }
 
 #categoryChart {
-    width: 100% !important;
-    height: 320px !important;
+    max-width: 400px !important;
+    max-height: 280px !important;
 }
 
 .chart-empty {
@@ -771,11 +773,13 @@ body {
     }
 
     .chart-area {
+        max-width: 320px;
         min-height: 200px;
     }
 
     #categoryChart {
-        height: 200px !important;
+        max-width: 320px !important;
+        max-height: 200px !important;
     }
 
     .chart-summary {
