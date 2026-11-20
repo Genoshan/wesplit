@@ -53,6 +53,59 @@ app.get('/', (req, res) => {
 });
 
 // Auth endpoints (no requieren autenticación)
+// Registro de nuevos usuarios
+app.post('/api/register', async (req, res) => {
+    const { username, password, email } = req.body;
+    const cleanUsername = username ? username.trim().toLowerCase() : '';
+
+    if (!cleanUsername || cleanUsername.length < 3) {
+        return res.status(400).json({ error: 'El username debe tener al menos 3 caracteres' });
+    }
+    if (!password || password.length < 4) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+    }
+
+    try {
+        const existing = await db.execute('SELECT id FROM users WHERE username = ?', [cleanUsername]);
+        if (existing.rows.length > 0) {
+            return res.status(409).json({ error: 'El username ya existe' });
+        }
+
+        // Hash simple
+        let hash = 0;
+        for (let i = 0; i < password.length; i++) {
+            const ch = password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + ch;
+            hash = hash & hash;
+        }
+        const passwordHash = 'simple:' + Math.abs(hash).toString(16);
+
+        const insertResult = await db.execute({
+            sql: 'INSERT INTO users (username, password_hash, role, payer, email) VALUES (?, ?, ?, ?, ?)',
+            args: [cleanUsername, passwordHash, 'member', 'me', email || null]
+        });
+
+        const userId = insertResult.lastInsertRowid;
+
+        // Auto-crear grupo "Casa"
+        const groupResult = await db.execute({
+            sql: 'INSERT INTO groups (name, owner_id, base_currency) VALUES (?, ?, ?)',
+            args: ['Casa', userId, 'UYU']
+        });
+        const groupId = groupResult.lastInsertRowid;
+        await db.execute({
+            sql: 'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
+            args: [groupId, userId, 'admin']
+        });
+
+        console.log(`[REGISTER] Usuario creado: ${cleanUsername} (ID: ${userId}), grupo Casa (ID: ${groupId})`);
+        res.json({ message: 'Usuario creado con éxito', username: cleanUsername });
+    } catch (err) {
+        console.error('[REGISTER] Error:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     console.log(`[LOGIN] Recibido: user="${username}" pass="****"`);

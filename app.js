@@ -587,6 +587,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Show register modal
+    document.getElementById('show-register-btn')?.addEventListener('click', () => {
+        const modal = new bootstrap.Modal(document.getElementById('registerModal'));
+        document.getElementById('reg-username').value = '';
+        document.getElementById('reg-password').value = '';
+        document.getElementById('reg-email').value = '';
+        modal.show();
+    });
+
+    // Confirm register
+    document.getElementById('confirm-register')?.addEventListener('click', async () => {
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value;
+        const email = document.getElementById('reg-email').value.trim();
+        if (!username || !password) {
+            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Username y contraseña son obligatorios.' });
+            return;
+        }
+        try {
+            await apiPost('/api/register', { username, password, email: email || undefined });
+            const modal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
+            modal.hide();
+            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' });
+            document.getElementById('login-username').value = username;
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        }
+    });
+
     // Load
     loadAuth();
 });
