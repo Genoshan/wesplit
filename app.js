@@ -182,10 +182,95 @@ async function loadExpenses() {
         allExpenses = data;
         renderExpenses();
         renderBalance();
+        renderBalances();
         updateChart();
         populateMonthFilter();
+        renderMembers();
     } catch (err) {
         console.error('[APP] Failed to load expenses:', err);
+    }
+}
+
+async function renderBalances() {
+    const container = document.getElementById('balance-detail');
+    if (!container || !currentGroupId) return;
+    try {
+        const data = await apiGet(`/api/groups/${currentGroupId}/balance`);
+        const balances = data.balances || [];
+        if (balances.length === 0) {
+            container.innerHTML = '<p class="text-muted">No hay datos de balance.</p>';
+            return;
+        }
+        container.innerHTML = balances.map(b => {
+            const balance = b.balance || 0;
+            const isPositive = balance > 0;
+            const isNegative = balance < 0;
+            const colorClass = isPositive ? 'text-success' : (isNegative ? 'text-danger' : 'text-muted');
+            const label = isPositive ? 'le deben' : (isNegative ? 'debe' : 'al día');
+            return `
+                <div class="balance-row d-flex justify-content-between align-items-center py-3 border-bottom">
+                    <div>
+                        <div class="fw-semibold">${b.username}</div>
+                        <div class="small text-muted">Pagó: ${formatCurrency(b.total_paid)} | Gastó: ${formatCurrency(b.total_spent)}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold ${colorClass}">${formatCurrency(Math.abs(balance))}</div>
+                        <div class="small ${colorClass}">${label}</div>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('[APP] Failed to load balances:', err);
+        container.innerHTML = '<p class="text-danger">Error al cargar balances.</p>';
+    }
+}
+
+async function renderMembers() {
+    const container = document.getElementById('members-list');
+    if (!container || !currentGroupId) return;
+    try {
+        const data = await apiGet(`/api/groups/${currentGroupId}`);
+        const members = data.members || [];
+        if (members.length === 0) {
+            container.innerHTML = '<p class="text-muted">No hay miembros.</p>';
+            return;
+        }
+        container.innerHTML = members.map(m => `
+            <div class="member-row d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div>
+                    <span class="fw-semibold">${m.username}</span>
+                    <span class="badge bg-secondary ms-2">${m.member_role}</span>
+                </div>
+                ${m.member_role !== 'admin' || members.filter(x => x.member_role === 'admin').length > 1
+                    ? `<button class="btn btn-sm btn-outline-danger" onclick="removeMember(${m.user_id})">Eliminar</button>`
+                    : ''}
+            </div>`).join('');
+    } catch (err) {
+        console.error('[APP] Failed to load members:', err);
+        container.innerHTML = '<p class="text-danger">Error al cargar miembros.</p>';
+    }
+}
+
+async function addMember() {
+    const username = document.getElementById('new-member-username')?.value?.trim();
+    const role = document.getElementById('new-member-role')?.value || 'member';
+    if (!username) { alert('Ingresá un username'); return; }
+    try {
+        await apiPost(`/api/groups/${currentGroupId}/members`, { username, role });
+        document.getElementById('new-member-username').value = '';
+        await renderMembers();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function removeMember(userId) {
+    if (!confirm('¿Eliminar este miembro?')) return;
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}/members/${userId}`);
+        await renderMembers();
+    } catch (err) {
+        alert('Error: ' + err.message);
     }
 }
 
@@ -476,6 +561,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Delete group button
     document.getElementById('delete-group-btn')?.addEventListener('click', openDeleteGroupModal);
     document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
+
+    // Tab change: refresh data
+    document.querySelectorAll('#app-tabs button[data-bs-toggle="tab"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (e) => {
+            const target = e.target.getAttribute('data-bs-target');
+            if (target === '#pane-balances') renderBalances();
+            if (target === '#pane-stats') updateChart();
+            if (target === '#pane-members') renderMembers();
+            if (target === '#pane-expenses') { renderExpenses(); renderBalance(); }
+        });
+    });
 
     // Load
     loadAuth();
