@@ -586,11 +586,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Google login
     const googleBtn = document.getElementById('google-login-btn');
     if (googleBtn) {
+        const googleSection = document.getElementById('google-login-section');
+        fetch('/api/google/config')
+            .then(res => res.json())
+            .then(data => {
+                if (data.enabled && googleSection) googleSection.hidden = false;
+            })
+            .catch(() => {});
+
         googleBtn.addEventListener('click', async () => {
             try {
-                const res = await fetch('/api/google/init');
+                const res = await fetch('/api/google/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ origin: window.location.origin })
+                });
                 const data = await res.json();
-                if (data.authUrl) window.location.href = data.authUrl;
+                if (!res.ok) throw new Error(data.error || 'No se pudo iniciar Google');
+                const authUrl = data.redirectUrl || data.authUrl;
+                if (authUrl) window.location.href = authUrl;
             } catch (e) {
                 document.getElementById('login-error').textContent = e.message;
             }

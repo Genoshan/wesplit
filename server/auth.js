@@ -247,7 +247,7 @@ function buildGoogleAuthUrl(clientId, redirectUri, state) {
         response_type: 'code',
         client_id: clientId,
         redirect_uri: redirectUri,
-        scope: 'openid email',
+        scope: 'openid email profile',
         state: state,
         access_type: 'offline'
     });
@@ -397,6 +397,10 @@ async function handleGoogleCallback(code, state) {
         if (!email) {
             googleSessions.delete(state);
             return { error: 'No se pudo obtener el email de Google' };
+        }
+        if (userInfoResult.email_verified === false) {
+            googleSessions.delete(state);
+            return { error: 'El email de Google no está verificado' };
         }
 
         // Obtener nombre del usuario desde Google

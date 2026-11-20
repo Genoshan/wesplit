@@ -312,10 +312,14 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Google OAuth endpoints (sin rate limit)
-app.post('/api/google/init', bodyParser.json(), apiLimiter, (req, res) => {
+app.get('/api/google/config', (req, res) => {
+    res.json({ enabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) });
+});
+
+app.post('/api/google/init', bodyParser.json(), apiLimiter, async (req, res) => {
     cleanGoogleSessions();
     const clientOrigin = req.body?.origin;
-    const result = initGoogleAuth(req, clientOrigin);
+    const result = await initGoogleAuth(req, clientOrigin);
     if (!result) {
         return res.status(500).json({ error: 'Google OAuth no configurado correctamente' });
     }
