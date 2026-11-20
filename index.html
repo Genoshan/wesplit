@@ -26,6 +26,34 @@
                 <button type="submit" class="btn btn-primary btn-action w-100">Ingresar</button>
             </form>
 
+            <!-- Modal crear grupo -->
+            <div class="modal fade" id="createGroupModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-sm">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Nuevo grupo</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="new-group-name">Nombre</label>
+                            <input type="text" id="new-group-name" class="form-control mb-3" placeholder="Ej. Trabajo">
+                            <label for="new-group-currency">Moneda base</label>
+                            <select id="new-group-currency" class="form-select">
+                                <option value="UYU">UYU - Peso uruguayo</option>
+                                <option value="USD">USD - Dólar</option>
+                                <option value="EUR">EUR - Euro</option>
+                                <option value="ARS">ARS - Peso argentino</option>
+                                <option value="BRL">BRL - Real</option>
+                            </select>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="confirm-create-group">Crear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="google-login-section" hidden>
                 <div class="login-divider">o continuar con</div>
                 <button type="button" id="google-login-btn" class="btn btn-google w-100">

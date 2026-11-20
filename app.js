@@ -101,16 +101,27 @@ function renderGroupSelector() {
         .catch(e => console.error('[APP] Group selector error:', e));
 }
 
-async function createGroup() {
-    const name = prompt('Nombre del nuevo grupo:');
-    if (!name || !name.trim()) return;
-    const currency = prompt('Moneda base (UYU, USD, EUR, etc.):', 'UYU') || 'UYU';
+function openCreateGroupModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createGroupModal'));
+    document.getElementById('new-group-name').value = '';
+    document.getElementById('new-group-currency').value = 'UYU';
+    modal.show();
+}
+
+async function confirmCreateGroup() {
+    const name = document.getElementById('new-group-name').value.trim();
+    const currency = document.getElementById('new-group-currency').value;
+    if (!name) {
+        alert('El nombre es requerido');
+        return;
+    }
     try {
-        const result = await apiPost('/api/groups', { name: name.trim(), base_currency: currency.toUpperCase() });
+        const result = await apiPost('/api/groups', { name, base_currency: currency });
         currentGroupId = result.id;
-        currentGroupName = name.trim();
+        currentGroupName = name;
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createGroupModal'));
+        modal.hide();
         await loadAuth();
-        alert(`Grupo "${name.trim()}" creado con éxito`);
     } catch (err) {
         alert('Error: ' + err.message);
     }
@@ -413,7 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // New group button
-    document.getElementById('new-group-btn')?.addEventListener('click', createGroup);
+    document.getElementById('new-group-btn')?.addEventListener('click', openCreateGroupModal);
+    document.getElementById('confirm-create-group')?.addEventListener('click', confirmCreateGroup);
 
     // Load
     loadAuth();
