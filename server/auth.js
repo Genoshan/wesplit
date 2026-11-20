@@ -63,7 +63,7 @@ async function verifyPasswordDB(username, password) {
     // Verificar password_hash (simpleHash o bcrypt)
     if (user.password_hash && user.password_hash.startsWith('simple:')) {
         if (simpleHashVerify(password, user.password_hash)) {
-            return { id: Number(user.id), username: user.username, role: user.role, payer: user.payer };
+            return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member' };
         }
     }
     return null;
@@ -77,7 +77,7 @@ async function verifyPassword(username, password) {
     // Fallback a legacy (hardcoded)
     const legacy = findUserLegacy(username);
     if (legacy && legacy.password === password) {
-        return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, role: 'admin', payer: legacy.payer };
+        return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, global_role: 'admin' };
     }
     return null;
 }
@@ -165,7 +165,7 @@ async function authMiddleware(req, res, next) {
             return res.status(401).json({ error: 'Usuario no encontrado' });
         }
 
-        req.user = { username: userResult.rows[0].username, payer: userResult.rows[0].payer, role: userResult.rows[0].role, userId: Number(userResult.rows[0].id) };
+        req.user = { username: userResult.rows[0].username, global_role: userResult.rows[0].global_role || userResult.rows[0].role || 'member', userId: Number(userResult.rows[0].id) };
 
         // Refresh TTL en cada request
         const newExpiry = Date.now() + SESSION_TTL_MS;
@@ -218,7 +218,7 @@ async function getUser(token) {
         const userResult = await db.execute('SELECT * FROM users WHERE id = ?', [Number(session.user_id)]);
         if (userResult.rows.length === 0) return null;
         const user = userResult.rows[0];
-        return { id: Number(user.id), username: user.username, payer: user.payer, role: user.role };
+        return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member' };
     } catch (e) {
         console.error('[AUTH] Error en getUser:', e);
         return null;
@@ -395,8 +395,8 @@ async function handleGoogleCallback(code, state) {
                 : simpleHash(process.env.AUTH_NOE || 'noe');
 
             const insertResult = await db.execute({
-                sql: 'INSERT INTO users (username, password_hash, role, payer) VALUES (?, ?, ?, ?)',
-                args: [user.username, pwHash, 'member', user.payer],
+                sql: 'INSERT INTO users (username, password_hash, global_role, email) VALUES (?, ?, ?, ?)',
+                args: [user.username, pwHash, 'member', userInfoResult.email || null],
             });
             dbUser = { id: insertResult.lastInsertRowid };
         }

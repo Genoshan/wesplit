@@ -171,14 +171,14 @@ async function initDB() {
     }
 
     const defaultUsers = [
-        { username: 'tin', password_hash: simpleHash(process.env.AUTH_TIN || 'tin'), role: 'admin', payer: 'me' },
-        { username: 'noe', password_hash: simpleHash(process.env.AUTH_NOE || 'noe'), role: 'member', payer: 'partner' },
+        { username: 'tin', password_hash: simpleHash(process.env.AUTH_TIN || 'tin'), global_role: 'admin' },
+        { username: 'noe', password_hash: simpleHash(process.env.AUTH_NOE || 'noe'), global_role: 'member' },
     ];
 
     for (const u of defaultUsers) {
         await db.execute({
-            sql: 'INSERT OR IGNORE INTO users (username, password_hash, role, payer) VALUES (?, ?, ?, ?)',
-            args: [u.username, u.password_hash, u.role, u.payer],
+            sql: 'INSERT OR IGNORE INTO users (username, password_hash, global_role) VALUES (?, ?, ?)',
+            args: [u.username, u.password_hash, u.global_role],
         });
     }
 
@@ -245,6 +245,25 @@ async function initDB() {
 
     await db.execute('UPDATE currencies SET is_default = 0 WHERE code != ?', ['UYU']);
     await db.execute('UPDATE currencies SET is_default = 1 WHERE code = ?', ['UYU']);
+
+    // ────────────────────────────────────────
+    // Migración: columna global_role en users
+    // ────────────────────────────────────────
+    try {
+        await db.execute('ALTER TABLE users ADD COLUMN global_role TEXT NOT NULL DEFAULT \'member\'');
+        console.log('[DB] Columna global_role agregada a users');
+    } catch (e) {
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna global_role puede que ya exista');
+        }
+    }
+
+    // Migrar datos de role -> global_role
+    try {
+        await db.execute('UPDATE users SET global_role = role WHERE global_role IS NULL OR global_role = \'member\'');
+    } catch (e) {
+        // Ignorar si la columna role ya no existe
+    }
 
     // ────────────────────────────────────────
     // Migración: columna currency en expenses

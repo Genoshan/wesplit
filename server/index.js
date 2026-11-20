@@ -89,8 +89,8 @@ app.post('/api/register', async (req, res) => {
         const passwordHash = 'simple:' + Math.abs(hash).toString(16);
 
         const insertResult = await db.execute({
-            sql: 'INSERT INTO users (username, password_hash, role, payer, email) VALUES (?, ?, ?, ?, ?)',
-            args: [cleanUsername, passwordHash, 'member', 'me', email || null]
+            sql: 'INSERT INTO users (username, password_hash, global_role, email) VALUES (?, ?, ?, ?)',
+            args: [cleanUsername, passwordHash, 'member', email || null]
         });
 
         const userId = insertResult.lastInsertRowid;
@@ -481,7 +481,7 @@ app.get('/api/auth/check', async (req, res) => {
     }
     const groups = await getUserGroups(user.id);
     const defaultGroup = groups.length > 0 ? { id: groups[0].id, name: groups[0].name, currency: groups[0].base_currency } : null;
-    res.json({ user: user.username, payer: user.payer, role: user.role, groups, defaultGroup });
+    res.json({ user: user.username, global_role: user.global_role, groups, defaultGroup });
 });
 
 // Listado de monedas - público (antes del auth)

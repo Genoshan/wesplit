@@ -79,7 +79,7 @@ async function apiPut(url, body) {
 async function loadAuth() {
     try {
         const data = await apiGet('/api/auth/check');
-        currentUser = { username: data.user, payer: data.payer, role: data.role };
+        currentUser = { username: data.user, global_role: data.global_role };
 
         if (data.groups && data.groups.length > 0) {
             currentGroupId = data.defaultGroup ? data.defaultGroup.id : data.groups[0].id;
