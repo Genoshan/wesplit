@@ -292,8 +292,6 @@ function openInviteModal() {
     const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
     document.getElementById('invite-username').value = '';
     document.getElementById('invite-result').innerHTML = '';
-    const link = `${window.location.origin}?invite=${currentGroupId}`;
-    document.getElementById('invite-link').value = link;
     modal.show();
 }
 
