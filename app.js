@@ -70,7 +70,7 @@ async function loadAuth() {
         document.getElementById('login-screen').hidden = false;
         document.getElementById('app-screen').hidden = true;
         const errEl = document.getElementById('login-error');
-        if (errEl) errEl.textContent = err.message;
+        if (errEl) errEl.textContent = ''; // Don't show 401 error on login screen
     }
 }
 
