@@ -19,8 +19,8 @@
     --owe-color: #ff652f;
 }
 
-/* GitHub Light */
-[data-bs-theme="github"] {
+/* (removed) */
+[data-bs-theme="github-disabled"] {
     --bs-body-bg: #f3f5f7;
     --bs-body-color: #1f2933;
     --bs-border-color: #d9e1e8;
@@ -36,38 +36,24 @@
     --success-color: #257a4f;
 }
 
-/* Dracula */
-[data-bs-theme="dracula"] {
-    --bs-body-bg: #282a36;
-    --bs-body-color: #f8f8f2;
-    --bs-border-color: #6272a4;
-    --bs-primary: #ff79c6;
-    --bs-success: #50fa7b;
+/* Splitwise Dark */
+[data-bs-theme="splitwise-dark"] {
+    --bs-body-bg: #1a1d21;
+    --bs-body-color: #e8e9ea;
+    --bs-border-color: #2d3139;
+    --bs-primary: #ff652f;
+    --bs-success: #5bc5a7;
     
-    --card-bg: #3a3d4f;
-    --text-primary: #f8f8f2;
-    --text-secondary: #c7cad8;
-    --accent-color: #ff79c6;
-    --accent-strong: #ff5bb8;
-    --soft-panel: #343746;
-    --success-color: #50fa7b;
-}
-
-/* Nord */
-[data-bs-theme="nord"] {
-    --bs-body-bg: #2e3440;
-    --bs-body-color: #eceff4;
-    --bs-border-color: #4c566a;
-    --bs-primary: #88c0d0;
-    --bs-success: #a3be8c;
-    
-    --card-bg: #3b4252;
-    --text-primary: #eceff4;
-    --text-secondary: #d8dee9;
-    --accent-color: #88c0d0;
-    --accent-strong: #5e81ac;
-    --soft-panel: #343c4a;
-    --success-color: #a3be8c;
+    --card-bg: #242830;
+    --text-primary: #e8e9ea;
+    --text-secondary: #9aa0a6;
+    --accent-color: #ff652f;
+    --accent-strong: #ff8559;
+    --soft-panel: #1f2328;
+    --success-color: #5bc5a7;
+    --danger-color: #ff652f;
+    --owed-color: #5bc5a7;
+    --owe-color: #ff652f;
 }
 
 /* Fix Bootstrap table colors in dark themes */
