@@ -64,6 +64,9 @@ app.post('/api/register', async (req, res) => {
     if (!password || password.length < 4) {
         return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
     }
+    if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: 'El email es obligatorio y debe ser válido' });
+    }
 
     try {
         const existing = await db.execute('SELECT id FROM users WHERE username = ?', [cleanUsername]);
@@ -102,6 +105,48 @@ app.post('/api/register', async (req, res) => {
         res.json({ message: 'Usuario creado con éxito', username: cleanUsername });
     } catch (err) {
         console.error('[REGISTER] Error:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// Actualizar perfil de usuario
+app.put('/api/profile', async (req, res) => {
+    const cookies = {};
+    if (req.headers.cookie) {
+        req.headers.cookie.split(';').forEach(pair => {
+            const [key, ...rest] = pair.split('=');
+            cookies[key.trim()] = rest.join('=').trim();
+        });
+    }
+    const user = await getUser(cookies['session_token']);
+    if (!user) {
+        return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const { email, password } = req.body;
+    try {
+        if (email !== undefined) {
+            if (!email || !email.includes('@')) {
+                return res.status(400).json({ error: 'Email inválido' });
+            }
+            await db.execute('UPDATE users SET email = ? WHERE id = ?', [email, user.id]);
+        }
+        if (password) {
+            if (password.length < 4) {
+                return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+            }
+            let hash = 0;
+            for (let i = 0; i < password.length; i++) {
+                const ch = password.charCodeAt(i);
+                hash = ((hash << 5) - hash) + ch;
+                hash = hash & hash;
+            }
+            const passwordHash = 'simple:' + Math.abs(hash).toString(16);
+            await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);
+        }
+        res.json({ message: 'Perfil actualizado con éxito' });
+    } catch (err) {
+        console.error('[PROFILE] Error:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });

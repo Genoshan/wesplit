@@ -43,6 +43,12 @@ async function apiDelete(url) {
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
 }
+async function apiPut(url, body) {
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+}
 
 // ── Auth ──
 async function loadAuth() {
@@ -580,6 +586,33 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delete-group-btn')?.addEventListener('click', openDeleteGroupModal);
     document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
 
+    // Profile button
+    document.getElementById('profile-btn')?.addEventListener('click', () => {
+        const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+        document.getElementById('profile-email').value = '';
+        document.getElementById('profile-password').value = '';
+        modal.show();
+    });
+    document.getElementById('confirm-profile')?.addEventListener('click', async () => {
+        const email = document.getElementById('profile-email').value.trim();
+        const password = document.getElementById('profile-password').value;
+        const body = {};
+        if (email) body.email = email;
+        if (password) body.password = password;
+        if (Object.keys(body).length === 0) {
+            Swal.fire({ icon: 'info', title: 'Sin cambios', text: 'No se modificó ningún campo.' });
+            return;
+        }
+        try {
+            await apiPut('/api/profile', body);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
+            modal.hide();
+            Swal.fire({ icon: 'success', title: 'Perfil actualizado', text: 'Los cambios se guardaron correctamente.' });
+        } catch (err) {
+            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        }
+    });
+
     // Tab change: refresh data
     document.querySelectorAll('#app-tabs button[data-bs-toggle="tab"]').forEach(btn => {
         btn.addEventListener('shown.bs.tab', (e) => {
@@ -605,8 +638,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = document.getElementById('reg-username').value.trim();
         const password = document.getElementById('reg-password').value;
         const email = document.getElementById('reg-email').value.trim();
-        if (!username || !password) {
-            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Username y contraseña son obligatorios.' });
+        if (!username || !password || !email) {
+            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Username, contraseña y email son obligatorios.' });
+            return;
+        }
+        if (!email.includes('@')) {
+            Swal.fire({ icon: 'warning', title: 'Email inválido', text: 'Ingresá un email válido.' });
             return;
         }
         try {

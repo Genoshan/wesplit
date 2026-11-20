@@ -42,8 +42,8 @@
                             <input type="text" id="reg-username" class="form-control mb-3" placeholder="Ej. juan" required>
                             <label for="reg-password">Contraseña</label>
                             <input type="password" id="reg-password" class="form-control mb-3" placeholder="Mínimo 4 caracteres" required>
-                            <label for="reg-email">Email (opcional)</label>
-                            <input type="email" id="reg-email" class="form-control" placeholder="tu@email.com">
+                            <label for="reg-email">Email</label>
+                            <input type="email" id="reg-email" class="form-control" placeholder="tu@email.com" required>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -78,6 +78,7 @@
                 <button id="delete-group-btn" class="btn btn-sm btn-outline-danger" title="Eliminar grupo actual" hidden>🗑️</button>
                 <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
                 <span id="user-display-name" class="user-label"></span>
+                <button id="profile-btn" class="btn btn-sm btn-outline-secondary" title="Mi perfil">⚙️</button>
                 <select id="themeSelect" class="form-select form-select-sm theme-select" onchange="changeTheme(this.value)" aria-label="Seleccionar tema">
                     <option value="dracula">Dracula</option>
                     <option value="nord">Nord</option>
@@ -263,6 +264,28 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-primary btn-sm" id="confirm-create-group">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal perfil -->
+    <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mi perfil</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="profile-email">Email</label>
+                    <input type="email" id="profile-email" class="form-control mb-3" placeholder="tu@email.com">
+                    <label for="profile-password">Nueva contraseña (opcional)</label>
+                    <input type="password" id="profile-password" class="form-control" placeholder="Dejar vacío para no cambiar">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="confirm-profile">Guardar</button>
                 </div>
             </div>
         </div>
