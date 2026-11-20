@@ -79,7 +79,7 @@ async function apiPut(url, body) {
 async function loadAuth() {
     try {
         const data = await apiGet('/api/auth/check');
-        currentUser = { username: data.user, global_role: data.global_role };
+        currentUser = { username: data.user, name: data.name || data.user, global_role: data.global_role };
 
         if (data.groups && data.groups.length > 0) {
             currentGroupId = data.defaultGroup ? data.defaultGroup.id : data.groups[0].id;
@@ -111,7 +111,7 @@ async function logout() {
 function renderHeader() {
     const el = document.getElementById('user-display-name');
     if (el && currentUser) {
-        el.textContent = currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1);
+        el.textContent = currentUser.name || (currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1));
     }
     const groupBadge = document.getElementById('current-group-name');
     if (groupBadge && currentGroupName) {
@@ -637,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Profile button
     document.getElementById('profile-btn')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+        document.getElementById('profile-name').value = currentUser?.name || '';
         document.getElementById('profile-current-password').value = '';
         document.getElementById('profile-email').value = '';
         document.getElementById('profile-password').value = '';
@@ -644,19 +645,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('confirm-profile')?.addEventListener('click', async () => {
         const currentPassword = document.getElementById('profile-current-password').value;
+        const name = document.getElementById('profile-name').value.trim();
         const email = document.getElementById('profile-email').value.trim();
         const password = document.getElementById('profile-password').value;
         const body = { current_password: currentPassword };
+        if (name) body.name = name;
         if (email) body.email = email;
         if (password) body.password = password;
-        if (!email && !password) {
+        if (!name && !email && !password) {
             Swal.fire({ icon: 'info', title: 'Sin cambios', text: 'No se modificó ningún campo.' });
             return;
         }
         try {
-            await apiPut('/api/profile', body);
+            const result = await apiPut('/api/profile', body);
             const modal = bootstrap.Modal.getInstance(document.getElementById('profileModal'));
             modal.hide();
+            if (result.name) {
+                currentUser.name = result.name;
+                renderHeader();
+            }
             Swal.fire({ icon: 'success', title: 'Perfil actualizado', text: 'Los cambios se guardaron correctamente.' });
         } catch (err) {
             Swal.fire({ icon: 'error', title: 'Error', text: err.message });
@@ -706,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show register modal
     document.getElementById('show-register-btn')?.addEventListener('click', () => {
         const modal = new bootstrap.Modal(document.getElementById('registerModal'));
+        document.getElementById('reg-name').value = '';
         document.getElementById('reg-username').value = '';
         document.getElementById('reg-password').value = '';
         document.getElementById('reg-email').value = '';
@@ -714,11 +722,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Confirm register
     document.getElementById('confirm-register')?.addEventListener('click', async () => {
+        const name = document.getElementById('reg-name').value.trim();
         const username = document.getElementById('reg-username').value.trim();
         const password = document.getElementById('reg-password').value;
         const email = document.getElementById('reg-email').value.trim();
-        if (!username || !password || !email) {
-            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Username, contraseña y email son obligatorios.' });
+        if (!name || !username || !password || !email) {
+            Swal.fire({ icon: 'warning', title: 'Campos requeridos', text: 'Nombre, username, contraseña y email son obligatorios.' });
             return;
         }
         if (!email.includes('@')) {
@@ -726,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            await apiPost('/api/register', { username, password, email });
+            await apiPost('/api/register', { username, password, email, name });
             const modal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
             modal.hide();
             Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' });

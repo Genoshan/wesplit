@@ -55,8 +55,9 @@ app.get('/', (req, res) => {
 // Auth endpoints (no requieren autenticación)
 // Registro de nuevos usuarios
 app.post('/api/register', async (req, res) => {
-    const { username, password, email } = req.body;
+    const { username, password, email, name } = req.body;
     const cleanUsername = username ? username.trim().toLowerCase() : '';
+    const cleanName = name ? String(name).trim() : '';
 
     if (!cleanUsername || cleanUsername.length < 3) {
         return res.status(400).json({ error: 'El username debe tener al menos 3 caracteres' });
@@ -89,8 +90,8 @@ app.post('/api/register', async (req, res) => {
         const passwordHash = 'simple:' + Math.abs(hash).toString(16);
 
         const insertResult = await db.execute({
-            sql: 'INSERT INTO users (username, password_hash, global_role, email) VALUES (?, ?, ?, ?)',
-            args: [cleanUsername, passwordHash, 'member', email || null]
+            sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
+            args: [cleanUsername, passwordHash, 'member', email || null, cleanName || cleanUsername]
         });
 
         const userId = insertResult.lastInsertRowid;
@@ -128,7 +129,7 @@ app.put('/api/profile', async (req, res) => {
         return res.status(401).json({ error: 'No autenticado' });
     }
 
-    const { email, password, current_password } = req.body;
+    const { email, password, current_password, name } = req.body;
 
     // Verificar contraseña actual si se quiere cambiar email o password
     if (email !== undefined || password) {
@@ -154,6 +155,13 @@ app.put('/api/profile', async (req, res) => {
     }
 
     try {
+        if (name !== undefined) {
+            const cleanName = String(name).trim();
+            if (!cleanName) {
+                return res.status(400).json({ error: 'El nombre no puede estar vacío' });
+            }
+            await db.execute('UPDATE users SET name = ? WHERE id = ?', [cleanName, user.id]);
+        }
         if (email !== undefined) {
             if (!email || !email.includes('@')) {
                 return res.status(400).json({ error: 'Email inválido' });
@@ -178,7 +186,10 @@ app.put('/api/profile', async (req, res) => {
             const passwordHash = 'simple:' + Math.abs(hash).toString(16);
             await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);
         }
-        res.json({ message: 'Perfil actualizado con éxito' });
+        res.json({
+            message: 'Perfil actualizado con éxito',
+            name: name !== undefined ? String(name).trim() : (user.name || user.username)
+        });
     } catch (err) {
         console.error('[PROFILE] Error:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
@@ -481,7 +492,7 @@ app.get('/api/auth/check', async (req, res) => {
     }
     const groups = await getUserGroups(user.id);
     const defaultGroup = groups.length > 0 ? { id: groups[0].id, name: groups[0].name, currency: groups[0].base_currency } : null;
-    res.json({ user: user.username, global_role: user.global_role, groups, defaultGroup });
+    res.json({ user: user.username, name: user.name, global_role: user.global_role, groups, defaultGroup });
 });
 
 // Listado de monedas - público (antes del auth)

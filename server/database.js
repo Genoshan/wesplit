@@ -156,6 +156,26 @@ async function initDB() {
     `);
 
     // ────────────────────────────────────────
+    // Migraciones: columnas nuevas en users
+    // ────────────────────────────────────────
+    try {
+        await db.execute('ALTER TABLE users ADD COLUMN name TEXT');
+        console.log('[DB] Columna name agregada a users');
+    } catch (e) {
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna name puede que ya exista');
+        }
+    }
+    try {
+        await db.execute('ALTER TABLE users ADD COLUMN global_role TEXT NOT NULL DEFAULT \'member\'');
+        console.log('[DB] Columna global_role agregada a users');
+    } catch (e) {
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna global_role puede que ya exista');
+        }
+    }
+
+    // ────────────────────────────────────────
     // Seed: usuarios por defecto
     // ────────────────────────────────────────
 
@@ -171,15 +191,17 @@ async function initDB() {
     }
 
     const defaultUsers = [
-        { username: 'tin', password_hash: simpleHash(process.env.AUTH_TIN || 'tin'), global_role: 'admin' },
-        { username: 'noe', password_hash: simpleHash(process.env.AUTH_NOE || 'noe'), global_role: 'member' },
+        { username: 'tin', password_hash: simpleHash(process.env.AUTH_TIN || 'tin'), global_role: 'admin', name: 'Tin' },
+        { username: 'noe', password_hash: simpleHash(process.env.AUTH_NOE || 'noe'), global_role: 'member', name: 'Noe' },
     ];
 
     for (const u of defaultUsers) {
         await db.execute({
-            sql: 'INSERT OR IGNORE INTO users (username, password_hash, global_role) VALUES (?, ?, ?)',
-            args: [u.username, u.password_hash, u.global_role],
+            sql: 'INSERT OR IGNORE INTO users (username, password_hash, global_role, name) VALUES (?, ?, ?, ?)',
+            args: [u.username, u.password_hash, u.global_role, u.name],
         });
+        // Update name if user already exists
+        await db.execute('UPDATE users SET name = ? WHERE username = ? AND (name IS NULL OR name = \'\')', [u.name, u.username]);
     }
 
     // ────────────────────────────────────────
@@ -245,18 +267,6 @@ async function initDB() {
 
     await db.execute('UPDATE currencies SET is_default = 0 WHERE code != ?', ['UYU']);
     await db.execute('UPDATE currencies SET is_default = 1 WHERE code = ?', ['UYU']);
-
-    // ────────────────────────────────────────
-    // Migración: columna global_role en users
-    // ────────────────────────────────────────
-    try {
-        await db.execute('ALTER TABLE users ADD COLUMN global_role TEXT NOT NULL DEFAULT \'member\'');
-        console.log('[DB] Columna global_role agregada a users');
-    } catch (e) {
-        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
-            console.log('[DB] Columna global_role puede que ya exista');
-        }
-    }
 
     // Migrar datos de role -> global_role
     try {

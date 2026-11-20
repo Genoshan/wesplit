@@ -16,10 +16,7 @@
             </div>
             <form id="login-form">
                 <label for="login-username">Usuario</label>
-                <select id="login-username" class="form-select" required>
-                    <option value="tin">Tin</option>
-                    <option value="noe">Noe</option>
-                </select>
+                <input type="text" id="login-username" class="form-control" placeholder="Tu username" autocomplete="username" required>
                 <label for="login-password">Contraseña</label>
                 <input type="password" id="login-password" class="form-control" placeholder="Contraseña" required>
                 <p id="login-error" class="text-danger small" role="status"></p>
@@ -38,6 +35,8 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                         </div>
                         <div class="modal-body">
+                            <label for="reg-name">Nombre completo</label>
+                            <input type="text" id="reg-name" class="form-control mb-3" placeholder="Ej. Juan Pérez" required>
                             <label for="reg-username">Username</label>
                             <input type="text" id="reg-username" class="form-control mb-3" placeholder="Ej. juan" required>
                             <label for="reg-password">Contraseña</label>
@@ -296,6 +295,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
+                    <label for="profile-name">Nombre</label>
+                    <input type="text" id="profile-name" class="form-control mb-3" placeholder="Tu nombre">
                     <label for="profile-current-password">Contraseña actual</label>
                     <input type="password" id="profile-current-password" class="form-control mb-3" placeholder="Requerida para cambios" required>
                     <label for="profile-email">Email</label>

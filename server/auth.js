@@ -73,7 +73,7 @@ async function verifyPasswordDB(username, password) {
     // Verificar password_hash (simpleHash o bcrypt)
     if (user.password_hash && user.password_hash.startsWith('simple:')) {
         if (simpleHashVerify(password, user.password_hash)) {
-            return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member' };
+            return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member', name: user.name || user.username };
         }
     }
     return null;
@@ -87,7 +87,7 @@ async function verifyPassword(username, password) {
     // Fallback a legacy (hardcoded)
     const legacy = findUserLegacy(username);
     if (legacy && legacy.password === password) {
-        return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, global_role: 'admin' };
+        return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, global_role: 'admin', name: legacy.username.charAt(0).toUpperCase() + legacy.username.slice(1) };
     }
     return null;
 }
@@ -175,7 +175,7 @@ async function authMiddleware(req, res, next) {
             return res.status(401).json({ error: 'Usuario no encontrado' });
         }
 
-        req.user = { username: userResult.rows[0].username, global_role: userResult.rows[0].global_role || userResult.rows[0].role || 'member', userId: Number(userResult.rows[0].id) };
+        req.user = { username: userResult.rows[0].username, global_role: userResult.rows[0].global_role || userResult.rows[0].role || 'member', userId: Number(userResult.rows[0].id), name: userResult.rows[0].name || userResult.rows[0].username };
 
         // Refresh TTL en cada request
         const newExpiry = Date.now() + SESSION_TTL_MS;
@@ -228,7 +228,7 @@ async function getUser(token) {
         const userResult = await db.execute('SELECT * FROM users WHERE id = ?', [Number(session.user_id)]);
         if (userResult.rows.length === 0) return null;
         const user = userResult.rows[0];
-        return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member' };
+        return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member', name: user.name || user.username };
     } catch (e) {
         console.error('[AUTH] Error en getUser:', e);
         return null;
@@ -399,6 +399,27 @@ async function handleGoogleCallback(code, state) {
             return { error: 'No se pudo obtener el email de Google' };
         }
 
+        // Obtener nombre del usuario desde Google
+        let googleName = '';
+        try {
+            const nameResponse = await new Promise((resolve, reject) => {
+                https.get(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${encodeURIComponent(tokenResponse.access_token)}`, res => {
+                    let body = '';
+                    res.on('data', chunk => { body += chunk; });
+                    res.on('end', () => {
+                        try {
+                            resolve(JSON.parse(body));
+                        } catch (e) {
+                            reject(new Error('Invalid userinfo response'));
+                        }
+                    });
+                }).on('error', reject);
+            });
+            googleName = nameResponse.name || '';
+        } catch (e) {
+            console.warn('[GOOGLE AUTH] No se pudo obtener el nombre:', e.message);
+        }
+
         // Verificar si el usuario ya existe por email
         let dbUser = await findUserByEmail(email);
 
@@ -418,10 +439,10 @@ async function handleGoogleCallback(code, state) {
             const passwordHash = 'simple:' + Math.abs(hash).toString('hex');
 
             const insertResult = await db.execute({
-                sql: 'INSERT INTO users (username, password_hash, global_role, email) VALUES (?, ?, ?, ?)',
-                args: [username, passwordHash, 'member', email],
+                sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
+                args: [username, passwordHash, 'member', email, googleName || username],
             });
-            dbUser = { id: Number(insertResult.lastInsertRowid), username };
+            dbUser = { id: Number(insertResult.lastInsertRowid), username, name: googleName || username };
 
             // Auto-crear grupo "Casa"
             const groupResult = await db.execute({
@@ -434,8 +455,13 @@ async function handleGoogleCallback(code, state) {
                 args: [groupId, dbUser.id, 'admin']
             });
 
-            console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (${email}), grupo Casa (ID: ${groupId})`);
+            console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (${email}), nombre: ${googleName}, grupo Casa (ID: ${groupId})`);
         } else {
+            // Actualizar nombre si no tiene
+            if (!dbUser.name && googleName) {
+                await db.execute('UPDATE users SET name = ? WHERE id = ?', [googleName, dbUser.id]);
+            }
+            dbUser.name = dbUser.name || googleName || dbUser.username;
             console.log(`[GOOGLE AUTH] Usuario existente: ${dbUser.username} (${email})`);
         }
 
