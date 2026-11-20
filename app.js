@@ -298,6 +298,8 @@ function openInviteModal() {
     const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
     document.getElementById('invite-username').value = '';
     document.getElementById('invite-result').innerHTML = '';
+    const link = `${window.location.origin}?invite=${currentGroupId}`;
+    document.getElementById('invite-link').value = link;
     modal.show();
 }
 
@@ -314,7 +316,7 @@ async function confirmInvite() {
         document.getElementById('invite-username').value = '';
         await renderMembers();
     } catch (err) {
-        resultEl.innerHTML = `<p class="text-danger small">❌ ${err.message}</p>`;
+        resultEl.innerHTML = `<p class="text-danger small">❌ ${err.message}. El usuario debe registrarse primero.</p>`;
     }
 }
 
@@ -633,6 +635,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // Invite member button
     document.getElementById('invite-member-btn')?.addEventListener('click', openInviteModal);
     document.getElementById('confirm-invite')?.addEventListener('click', confirmInvite);
+    document.getElementById('copy-invite-link')?.addEventListener('click', () => {
+        const link = document.getElementById('invite-link').value;
+        navigator.clipboard.writeText(link).then(() => {
+            Swal.fire({ icon: 'success', title: 'Copiado', text: 'Link copiado al portapapeles.', timer: 1500, showConfirmButton: false });
+        });
+    });
+
+    // Check for invite param on page load
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteGroup = urlParams.get('invite');
+    if (inviteGroup) {
+        const loginError = document.getElementById('login-error');
+        if (loginError) {
+            loginError.textContent = 'Te invitaron a un grupo. Registrate para unirte.';
+            loginError.className = 'text-info small';
+        }
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('registerModal'));
+            modal.show();
+        }, 500);
+    }
 
     // Profile button
     document.getElementById('profile-btn')?.addEventListener('click', () => {
@@ -726,11 +749,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            await apiPost('/api/register', { username, password, email });
+            const urlParams = new URLSearchParams(window.location.search);
+            const inviteGroup = urlParams.get('invite');
+            await apiPost('/api/register', { username, password, email, invite_group: inviteGroup || undefined });
             const modal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
             modal.hide();
-            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' });
+            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' + (inviteGroup ? ' Fuiste agregado al grupo invitado.' : '') });
             document.getElementById('login-username').value = username;
+            if (inviteGroup) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
         } catch (err) {
             Swal.fire({ icon: 'error', title: 'Error', text: err.message });
         }
