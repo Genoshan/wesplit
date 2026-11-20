@@ -55,7 +55,7 @@ app.get('/', (req, res) => {
 // Auth endpoints (no requieren autenticación)
 // Registro de nuevos usuarios
 app.post('/api/register', async (req, res) => {
-    const { username, password, email, invite_group } = req.body;
+    const { username, password, email } = req.body;
     const cleanUsername = username ? username.trim().toLowerCase() : '';
 
     if (!cleanUsername || cleanUsername.length < 3) {
@@ -101,21 +101,8 @@ app.post('/api/register', async (req, res) => {
             args: [groupId, userId, 'admin']
         });
 
-        // Si hay grupo de invitación, agregar al usuario
-        if (invite_group) {
-            const inviteGroupId = Number(invite_group);
-            const groupCheck = await db.execute('SELECT id, name FROM groups WHERE id = ?', [inviteGroupId]);
-            if (groupCheck.rows.length > 0) {
-                await db.execute({
-                    sql: 'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
-                    args: [inviteGroupId, userId, 'member']
-                });
-                console.log(`[REGISTER] Usuario ${cleanUsername} agregado al grupo de invitación ${inviteGroupId}`);
-            }
-        }
-
         console.log(`[REGISTER] Usuario creado: ${cleanUsername} (ID: ${userId}), grupo Casa (ID: ${groupId})`);
-        res.json({ message: 'Usuario creado con éxito', username: cleanUsername, joined_group: invite_group ? Number(invite_group) : null });
+        res.json({ message: 'Usuario creado con éxito', username: cleanUsername });
     } catch (err) {
         console.error('[REGISTER] Error:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
