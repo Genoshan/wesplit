@@ -197,7 +197,17 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.current-group-badge {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--soft-panel);
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-left: 8px;
 }
 
 .theme-select {

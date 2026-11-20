@@ -72,15 +72,23 @@
         <header class="app-header">
             <div class="header-left">
                 <h1>Gastos Compartidos</h1>
+                <span id="current-group-name" class="current-group-badge"></span>
             </div>
             <div class="header-actions">
-                <button id="new-group-btn" class="btn btn-sm btn-outline-primary" title="Crear nuevo grupo">+</button>
-                <button id="delete-group-btn" class="btn btn-sm btn-outline-danger" title="Eliminar grupo actual" hidden>🗑️</button>
                 <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
-                <span id="user-display-name" class="user-label"></span>
-                <button id="profile-btn" class="btn btn-sm btn-outline-secondary" title="Mi perfil">⚙️</button>
-                <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Cambiar tema" onclick="toggleTheme()">☀️</button>
-                <button id="logout-btn" class="btn btn-sm btn-outline-secondary" onclick="logout()">Salir</button>
+                <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
+                <button id="delete-group-btn" class="btn btn-sm btn-outline-danger" title="Eliminar grupo actual" hidden>🗑️</button>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span id="user-display-name" class="user-label"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button class="dropdown-item" id="profile-btn">⚙️ Mi perfil</button></li>
+                        <li><button class="dropdown-item" onclick="toggleTheme()">🌙/☀️ Cambiar tema</button></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><button class="dropdown-item text-danger" onclick="logout()">🚪 Salir</button></li>
+                    </ul>
+                </div>
             </div>
         </header>
 

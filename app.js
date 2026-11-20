@@ -107,6 +107,10 @@ function renderHeader() {
     if (el && currentUser) {
         el.textContent = currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1);
     }
+    const groupBadge = document.getElementById('current-group-name');
+    if (groupBadge && currentGroupName) {
+        groupBadge.textContent = currentGroupName;
+    }
 }
 
 function renderGroupSelector() {
@@ -122,10 +126,14 @@ function renderGroupSelector() {
             selector.innerHTML = data.groups.map(g =>
                 `<option value="${g.id}" ${g.id == currentGroupId ? 'selected' : ''}>${g.name}</option>`
             ).join('');
+            const groupBadge = document.getElementById('current-group-name');
+            if (groupBadge) groupBadge.textContent = currentGroupName;
             selector.onchange = () => {
                 currentGroupId = parseInt(selector.value);
                 const selected = data.groups.find(g => g.id == currentGroupId);
                 currentGroupName = selected ? selected.name : null;
+                const groupBadge = document.getElementById('current-group-name');
+                if (groupBadge) groupBadge.textContent = currentGroupName || '';
                 loadExpenses();
                 updateDeleteButton(data.groups);
             };
