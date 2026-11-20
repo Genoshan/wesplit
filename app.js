@@ -1,5 +1,5 @@
 const themeKey = 'seg_theme';
-const defaultTheme = 'github';
+const defaultTheme = 'splitwise';
 let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;

@@ -1,6 +1,26 @@
-/* GitHub Light (default) */
-[data-bs-theme="github"],
+/* Splitwise (default) */
+[data-bs-theme="splitwise"],
 :root {
+    --bs-body-bg: #f7f8fa;
+    --bs-body-color: #2d3436;
+    --bs-border-color: #e0e4e8;
+    --bs-primary: #ff652f;
+    --bs-success: #5bc5a7;
+    
+    --card-bg: #ffffff;
+    --text-primary: #2d3436;
+    --text-secondary: #636e72;
+    --accent-color: #ff652f;
+    --accent-strong: #e85a2a;
+    --soft-panel: #f0f2f5;
+    --success-color: #5bc5a7;
+    --danger-color: #ff652f;
+    --owed-color: #5bc5a7;
+    --owe-color: #ff652f;
+}
+
+/* GitHub Light */
+[data-bs-theme="github"] {
     --bs-body-bg: #f3f5f7;
     --bs-body-color: #1f2933;
     --bs-border-color: #d9e1e8;
