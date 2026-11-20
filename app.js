@@ -144,7 +144,7 @@ function renderGroupSelector() {
 }
 
 function updateDeleteButton(groups) {
-    const btn = document.getElementById('delete-group-btn');
+    const btn = document.getElementById('delete-group-menu-btn');
     if (!btn) return;
     if (!groups) {
         fetch('/api/auth/check').then(r => r.json()).then(d => updateDeleteButton(d.groups)).catch(() => {});
@@ -609,8 +609,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // New group button
     document.getElementById('new-group-btn')?.addEventListener('click', openCreateGroupModal);
     document.getElementById('confirm-create-group')?.addEventListener('click', confirmCreateGroup);
-    // Delete group button
-    document.getElementById('delete-group-btn')?.addEventListener('click', openDeleteGroupModal);
+    // Delete group (in dropdown)
+    document.getElementById('delete-group-menu-btn')?.addEventListener('click', openDeleteGroupModal);
     document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
 
     // Profile button

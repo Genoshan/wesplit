@@ -77,7 +77,6 @@
             <div class="header-actions">
                 <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
                 <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
-                <button id="delete-group-btn" class="btn btn-sm btn-outline-danger" title="Eliminar grupo actual" hidden>🗑️</button>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <span id="user-display-name" class="user-label"></span>
@@ -86,6 +85,7 @@
                         <li><button class="dropdown-item" id="profile-btn">⚙️ Mi perfil</button></li>
                         <li><button class="dropdown-item" onclick="toggleTheme()">🌙/☀️ Cambiar tema</button></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><button class="dropdown-item text-danger" id="delete-group-menu-btn" hidden onclick="openDeleteGroupModal()">🗑️ Eliminar grupo actual</button></li>
                         <li><button class="dropdown-item text-danger" onclick="logout()">🚪 Salir</button></li>
                     </ul>
                 </div>
