@@ -45,6 +45,16 @@ async function findUser(username) {
     return null;
 }
 
+async function findUserByEmail(email) {
+    try {
+        const result = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        if (result.rows.length > 0) return result.rows[0];
+    } catch (e) {
+        console.warn('[AUTH] No se pudo consultar tabla users por email');
+    }
+    return null;
+}
+
 function findUserLegacy(username) {
     const USERS = {
         tin: { password: process.env.AUTH_TIN, payer: 'me' },
@@ -318,24 +328,27 @@ function cleanGoogleSessions() {
     }
 }
 
-function getAuthorizedEmails() {
-    const emails = process.env.GOOGLE_AUTHORIZED_EMAILS;
-    if (!emails) return new Set();
-    return new Set(emails.split(',').map(e => e.trim().toLowerCase()));
+// Genera un username a partir del email
+function emailToUsername(email) {
+    const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+    return base || 'user';
 }
 
-function mapEmailToUser(email) {
-    const authorizedEmails = getAuthorizedEmails();
-    if (!authorizedEmails.has(email.toLowerCase())) {
-        return null;
+// Verifica si un username ya existe
+async function usernameExists(username) {
+    const result = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
+    return result.rows.length > 0;
+}
+
+// Genera un username único
+async function uniqueUsername(base) {
+    let username = base;
+    let counter = 1;
+    while (await usernameExists(username)) {
+        username = base + counter;
+        counter++;
     }
-
-    const emailMap = {
-        'argordster@gmail.com': { username: 'tin', payer: 'me' },
-        'mnovoapacilio@gmail.com': { username: 'noe', payer: 'partner' }
-    };
-
-    return emailMap[email.toLowerCase()] || null;
+    return username;
 }
 
 async function initGoogleAuth(req, clientOrigin) {
@@ -380,25 +393,50 @@ async function handleGoogleCallback(code, state) {
             }).on('error', reject);
         });
 
-        const user = mapEmailToUser(userInfoResult.email);
-        if (!user) {
+        const email = userInfoResult.email;
+        if (!email) {
             googleSessions.delete(state);
-            return { error: 'Email no autorizado para acceder a la aplicación' };
+            return { error: 'No se pudo obtener el email de Google' };
         }
 
-        // Verificar si el usuario existe en la DB, si no, crearlo
-        let dbUser = await findUser(user.username);
+        // Verificar si el usuario ya existe por email
+        let dbUser = await findUserByEmail(email);
+
         if (!dbUser) {
-            // Crear usuario por defecto con password_hash del environment
-            const pwHash = user.username === 'tin'
-                ? simpleHash(process.env.AUTH_TIN || 'tin')
-                : simpleHash(process.env.AUTH_NOE || 'noe');
+            // Generar username único a partir del email
+            const baseUsername = emailToUsername(email);
+            const username = await uniqueUsername(baseUsername);
+
+            // Crear usuario con password aleatorio (no usará password, solo Google OAuth)
+            const randomPassword = crypto.randomBytes(16).toString('hex');
+            let hash = 0;
+            for (let i = 0; i < randomPassword.length; i++) {
+                const ch = randomPassword.charCodeAt(i);
+                hash = ((hash << 5) - hash) + ch;
+                hash = hash & hash;
+            }
+            const passwordHash = 'simple:' + Math.abs(hash).toString('hex');
 
             const insertResult = await db.execute({
                 sql: 'INSERT INTO users (username, password_hash, global_role, email) VALUES (?, ?, ?, ?)',
-                args: [user.username, pwHash, 'member', userInfoResult.email || null],
+                args: [username, passwordHash, 'member', email],
             });
-            dbUser = { id: insertResult.lastInsertRowid };
+            dbUser = { id: Number(insertResult.lastInsertRowid), username };
+
+            // Auto-crear grupo "Casa"
+            const groupResult = await db.execute({
+                sql: 'INSERT INTO groups (name, owner_id, base_currency) VALUES (?, ?, ?)',
+                args: ['Casa', dbUser.id, 'UYU']
+            });
+            const groupId = groupResult.lastInsertRowid;
+            await db.execute({
+                sql: 'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
+                args: [groupId, dbUser.id, 'admin']
+            });
+
+            console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (${email}), grupo Casa (ID: ${groupId})`);
+        } else {
+            console.log(`[GOOGLE AUTH] Usuario existente: ${dbUser.username} (${email})`);
         }
 
         // Crear sesión
@@ -414,7 +452,7 @@ async function handleGoogleCallback(code, state) {
         }
 
         googleSessions.delete(state);
-        return { token, user: user.username, payer: user.payer };
+        return { token, user: dbUser.username };
     } catch (err) {
         googleSessions.delete(state);
         return { error: err.message || 'Error al autenticar con Google' };
