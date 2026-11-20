@@ -1,26 +1,10 @@
 const crypto = require('crypto');
 const https = require('https');
 const { URL } = require('url');
+const db = require('./database');
 
-const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 horas
-const GOOGLE_STATE_TTL = 10 * 60 * 1000; // 10 minutos
-
-const USERS = {
-    tin: { password: process.env.AUTH_TIN, payer: 'me' },
-    noe: { password: process.env.AUTH_NOE, payer: 'partner' }
-};
-
-// Validar que las contraseñas estén configuradas
-Object.entries(USERS).forEach(([name, user]) => {
-    if (!user.password) {
-        console.error(`[AUTH] Falta AUTH_${name.toUpperCase()} en variables de entorno`);
-    }
-});
-
-const sessions = new Map();
-
-// Google OAuth state store
-const googleSessions = new Map();
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;  // 10 minutos
 
 function generateToken() {
     return crypto.randomBytes(32).toString('hex');
@@ -36,66 +20,217 @@ function parseCookies(header) {
     return cookies;
 }
 
-function cleanExpiredSessions() {
-    const now = Date.now();
-    for (const [token, session] of sessions) {
-        if (now - session.createdAt > SESSION_TTL) {
-            sessions.delete(token);
+// ────────────────────────────────────────
+// Auth: credenciales desde DB (con fallback a legacy)
+// ────────────────────────────────────────
+
+function simpleHashVerify(input, stored) {
+    if (!stored) return false;
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+        const ch = input.charCodeAt(i);
+        hash = ((hash << 5) - hash) + ch;
+        hash = hash & hash;
+    }
+    return stored === `simple:${Math.abs(hash).toString(16)}`;
+}
+
+async function findUser(username) {
+    try {
+        const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+        if (result.rows.length > 0) return result.rows[0];
+    } catch (e) {
+        console.warn('[AUTH] No se pudo consultar tabla users, usando fallback en memoria');
+    }
+    return null;
+}
+
+function findUserLegacy(username) {
+    const USERS = {
+        tin: { password: process.env.AUTH_TIN, payer: 'me' },
+        noe: { password: process.env.AUTH_NOE, payer: 'partner' }
+    };
+    if (USERS[username]) {
+        return { ...USERS[username], username };
+    }
+    return null;
+}
+
+async function verifyPasswordDB(username, password) {
+    const user = await findUser(username);
+    if (!user) return null;
+
+    // Verificar password_hash (simpleHash o bcrypt)
+    if (user.password_hash && user.password_hash.startsWith('simple:')) {
+        if (simpleHashVerify(password, user.password_hash)) {
+            return { id: Number(user.id), username: user.username, role: user.role, payer: user.payer };
         }
     }
+    return null;
 }
 
-function authMiddleware(req, res, next) {
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies['session_token'];
+async function verifyPassword(username, password) {
+    // Primero intenta DB
+    const dbUser = await verifyPasswordDB(username, password);
+    if (dbUser) return dbUser;
 
-    if (!token || !sessions.has(token)) {
-        return res.status(401).json({ error: 'No autenticado' });
+    // Fallback a legacy (hardcoded)
+    const legacy = findUserLegacy(username);
+    if (legacy && legacy.password === password) {
+        return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, role: 'admin', payer: legacy.payer };
     }
-
-    const session = sessions.get(token);
-    if (Date.now() - session.createdAt > SESSION_TTL) {
-        sessions.delete(token);
-        return res.status(401).json({ error: 'Sesión expirada' });
-    }
-
-    req.user = { username: session.username, payer: session.payer };
-    next();
+    return null;
 }
 
-function login(username, password) {
-    const user = USERS[username];
-    console.log(`[AUTH login] username="${username}" password="${password}"`);
-    console.log(`[AUTH login] USERS[username] =`, user);
-    console.log(`[AUTH login] user.password="${user?.password}"`);
-    console.log(`[AUTH login] match: ${user?.password === password}`);
-    if (!user || !user.password || user.password !== password) {
-        console.log(`[AUTH login] FALLO: user=${!!user}, pass=${!!user?.password}, match=${user?.password === password}`);
-        return null;
-    }
+// ────────────────────────────────────────
+// Sesiones: persistencia en DB
+// ────────────────────────────────────────
 
-    cleanExpiredSessions();
-
+async function createSession(userId) {
     const token = generateToken();
-    sessions.set(token, { username, payer: user.payer, createdAt: Date.now() });
+    const expiresAt = Date.now() + SESSION_TTL_MS;
+    try {
+        await db.execute({
+            sql: 'INSERT OR REPLACE INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)',
+            args: [token, userId, expiresAt]
+        });
+    } catch (e) {
+        console.error('[AUTH] Error creando sesión en DB:', e);
+    }
     return token;
 }
 
-function logout(token) {
-    sessions.delete(token);
-}
-
-function getUser(token) {
-    const session = sessions.get(token);
-    if (!session) return null;
-    if (Date.now() - session.createdAt > SESSION_TTL) {
-        sessions.delete(token);
+async function getSession(token) {
+    try {
+        const result = await db.execute('SELECT * FROM sessions WHERE token = ?', [token]);
+        if (result.rows.length === 0) return null;
+        const session = result.rows[0];
+        if (Date.now() > session.expires_at) {
+            await db.execute('DELETE FROM sessions WHERE token = ?', [token]);
+            return null;
+        }
+        // Refresh TTL
+        const newExpiry = Date.now() + SESSION_TTL_MS;
+        await db.execute('UPDATE sessions SET expires_at = ? WHERE token = ?', [newExpiry, token]);
+        return { userId: session.user_id, username: session.user_id }; // Se llena con getUser
+    } catch (e) {
+        console.error('[AUTH] Error leyendo sesión de DB:', e);
         return null;
     }
-    return { username: session.username, payer: session.payer };
 }
 
+async function deleteSession(token) {
+    try {
+        await db.execute('DELETE FROM sessions WHERE token = ?', [token]);
+    } catch (e) {
+        console.error('[AUTH] Error eliminando sesión de DB:', e);
+    }
+}
+
+async function cleanExpiredSessions() {
+    try {
+        await db.execute('DELETE FROM sessions WHERE expires_at < ?', [Date.now()]);
+    } catch (e) {
+        // Silenciar errores en limpieza periódica
+    }
+}
+
+// ────────────────────────────────────────
+// Middleware
+// ────────────────────────────────────────
+
+async function authMiddleware(req, res, next) {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies['session_token'];
+
+    if (!token) {
+        return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    // Verificar sesión en DB
+    try {
+        const result = await db.execute('SELECT * FROM sessions WHERE token = ?', [token]);
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Sesión no encontrada' });
+        }
+        const session = result.rows[0];
+        if (Date.now() > session.expires_at) {
+            await deleteSession(token);
+            return res.status(401).json({ error: 'Sesión expirada' });
+        }
+
+        // Obtener info del usuario
+        const userResult = await db.execute('SELECT * FROM users WHERE id = ?', [session.user_id]);
+        if (userResult.rows.length === 0) {
+            return res.status(401).json({ error: 'Usuario no encontrado' });
+        }
+
+        req.user = { username: userResult.rows[0].username, payer: userResult.rows[0].payer, role: userResult.rows[0].role, userId: Number(userResult.rows[0].id) };
+
+        // Refresh TTL en cada request
+        const newExpiry = Date.now() + SESSION_TTL_MS;
+        await db.execute('UPDATE sessions SET expires_at = ? WHERE token = ?', [newExpiry, token]);
+
+        next();
+    } catch (e) {
+        console.error('[AUTH] Error en middleware:', e);
+        return res.status(401).json({ error: 'Error de autenticación' });
+    }
+}
+
+// ────────────────────────────────────────
+// Funciones de login/logout
+// ────────────────────────────────────────
+
+async function login(username, password) {
+    const user = await verifyPassword(username, password);
+    if (!user) {
+        console.log(`[AUTH] FALLO: credenciales inválidas para user="${username}"`);
+        return null;
+    }
+
+    await createSession(user.id);
+
+    // Revisar si la sesión fue creada
+    const tokenResult = await db.execute('SELECT token FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [user.id]);
+    if (tokenResult.rows.length > 0) {
+        return tokenResult.rows[0].token;
+    }
+    return generateToken(); // fallback
+}
+
+function logout(token) {
+    deleteSession(token);
+}
+
+async function getUser(token) {
+    if (!token) return null;
+
+    try {
+        const result = await db.execute('SELECT * FROM sessions WHERE token = ?', [token]);
+        if (result.rows.length === 0) return null;
+        const session = result.rows[0];
+        if (Date.now() > session.expires_at) {
+            await deleteSession(token);
+            return null;
+        }
+
+        const userResult = await db.execute('SELECT * FROM users WHERE id = ?', [Number(session.user_id)]);
+        if (userResult.rows.length === 0) return null;
+        const user = userResult.rows[0];
+        return { id: Number(user.id), username: user.username, payer: user.payer, role: user.role };
+    } catch (e) {
+        console.error('[AUTH] Error en getUser:', e);
+        return null;
+    }
+}
+
+// ────────────────────────────────────────
 // Google OAuth functions
+// ────────────────────────────────────────
+
+// Google OAuth state store (en memoria, suficiente para OAuth state)
+const googleSessions = new Map();
 
 function buildGoogleAuthUrl(clientId, redirectUri, state) {
     const params = new URLSearchParams({
@@ -177,7 +312,7 @@ function getGoogleRedirectUri(req, clientOrigin) {
 function cleanGoogleSessions() {
     const now = Date.now();
     for (const [state, session] of googleSessions) {
-        if (now - session.createdAt > GOOGLE_STATE_TTL) {
+        if (now - session.createdAt > GOOGLE_STATE_TTL_MS) {
             googleSessions.delete(state);
         }
     }
@@ -203,7 +338,7 @@ function mapEmailToUser(email) {
     return emailMap[email.toLowerCase()] || null;
 }
 
-function initGoogleAuth(req, clientOrigin) {
+async function initGoogleAuth(req, clientOrigin) {
     if (!process.env.GOOGLE_CLIENT_ID) {
         console.error('[AUTH] Falta GOOGLE_CLIENT_ID en variables de entorno');
         return null;
@@ -222,40 +357,100 @@ function initGoogleAuth(req, clientOrigin) {
     return { authUrl, state };
 }
 
-function handleGoogleCallback(code, state) {
+async function handleGoogleCallback(code, state) {
     const sessionData = googleSessions.get(state);
     if (!sessionData) {
-        return { error: 'Estado invalido o expirado' };
+        return { error: 'Estado inválido o expirado' };
     }
 
-    cleanGoogleSessions();
+    try {
+        const tokenResponse = await exchangeCodeForToken(code, sessionData.redirectUri);
 
-    return exchangeCodeForToken(code, sessionData.redirectUri)
-        .then(tokenResponse => {
-            return new Promise((resolve, reject) => {
-                https.get(`https://www.googleapis.com/oauth2/v2/tokeninfo?access_token=${encodeURIComponent(tokenResponse.access_token)}`, res => {
-                    let body = '';
-                    res.on('data', chunk => { body += chunk; });
-                    res.on('end', async () => {
-                        try {
-                            const userInfo = JSON.parse(body);
-                            const user = mapEmailToUser(userInfo.email);
-                            if (!user) {
-                                return resolve({ error: 'Email no autorizado para acceder a la aplicacion' });
-                            }
+        const userInfoResult = await new Promise((resolve, reject) => {
+            https.get(`https://www.googleapis.com/oauth2/v2/tokeninfo?access_token=${encodeURIComponent(tokenResponse.access_token)}`, res => {
+                let body = '';
+                res.on('data', chunk => { body += chunk; });
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(body));
+                    } catch (e) {
+                        reject(new Error('Invalid user info response'));
+                    }
+                });
+            }).on('error', reject);
+        });
 
-                            const token = generateToken();
-                            sessions.set(token, { username: user.username, payer: user.payer, createdAt: Date.now() });
-                            googleSessions.delete(state);
-                            resolve({ token, user: user.username, payer: user.payer });
-                        } catch (e) {
-                            reject(new Error('Invalid user info response'));
-                        }
-                    });
-                }).on('error', reject);
+        const user = mapEmailToUser(userInfoResult.email);
+        if (!user) {
+            googleSessions.delete(state);
+            return { error: 'Email no autorizado para acceder a la aplicación' };
+        }
+
+        // Verificar si el usuario existe en la DB, si no, crearlo
+        let dbUser = await findUser(user.username);
+        if (!dbUser) {
+            // Crear usuario por defecto con password_hash del environment
+            const pwHash = user.username === 'tin'
+                ? simpleHash(process.env.AUTH_TIN || 'tin')
+                : simpleHash(process.env.AUTH_NOE || 'noe');
+
+            const insertResult = await db.execute({
+                sql: 'INSERT INTO users (username, password_hash, role, payer) VALUES (?, ?, ?, ?)',
+                args: [user.username, pwHash, 'member', user.payer],
             });
-        })
-        .catch(err => ({ error: err.message || 'Error al autenticar con Google' }));
+            dbUser = { id: insertResult.lastInsertRowid };
+        }
+
+        // Crear sesión
+        const token = generateToken();
+        const expiresAt = Date.now() + SESSION_TTL_MS;
+        try {
+            await db.execute({
+                sql: 'INSERT OR REPLACE INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)',
+                args: [token, dbUser.id, expiresAt]
+            });
+        } catch (e) {
+            console.error('[AUTH] Error creando sesión Google:', e);
+        }
+
+        googleSessions.delete(state);
+        return { token, user: user.username, payer: user.payer };
+    } catch (err) {
+        googleSessions.delete(state);
+        return { error: err.message || 'Error al autenticar con Google' };
+    }
 }
 
-module.exports = { authMiddleware, login, logout, getUser, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions };
+async function getUserGroups(userId) {
+    try {
+        const result = await db.execute(`
+            SELECT g.*, gm.role as member_role
+            FROM groups g
+            JOIN group_members gm ON g.id = gm.group_id
+            WHERE gm.user_id = ?
+            ORDER BY g.name ASC
+        `, [userId]);
+        return result.rows;
+    } catch (e) {
+        console.error('[AUTH] Error obteniendo grupos de usuario:', e);
+        return [];
+    }
+}
+
+module.exports = {
+    authMiddleware,
+    login,
+    logout,
+    getUser,
+    getUserGroups,
+    initGoogleAuth,
+    handleGoogleCallback,
+    cleanGoogleSessions,
+    findUser,
+    verifyPassword,
+    createSession,
+    getSession,
+    deleteSession,
+    parseCookies,
+    cleanExpiredSessions
+};

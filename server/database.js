@@ -7,6 +7,109 @@ const db = createClient({
 });
 
 async function initDB() {
+    // ────────────────────────────────────────
+    // Tablas de autenticación
+    // ────────────────────────────────────────
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+            payer TEXT NOT NULL DEFAULT 'me',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            ip TEXT DEFAULT '',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    // ────────────────────────────────────────
+    // Tablas de grupos
+    // ────────────────────────────────────────
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            owner_id INTEGER NOT NULL,
+            base_currency TEXT NOT NULL DEFAULT 'UYU',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+            joined_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            UNIQUE(group_id, user_id),
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    // ────────────────────────────────────────
+    // Tablas de gastos (por grupo)
+    // ────────────────────────────────────────
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS group_expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            description TEXT,
+            amount REAL NOT NULL,
+            payer TEXT NOT NULL,
+            category TEXT,
+            currency TEXT NOT NULL DEFAULT 'UYU',
+            split_mode TEXT NOT NULL DEFAULT 'equal',
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS group_splits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            expense_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            FOREIGN KEY (expense_id) REFERENCES group_expenses(id) ON DELETE CASCADE
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS group_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            from_user TEXT NOT NULL,
+            to_user TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL DEFAULT 'UYU',
+            date TEXT NOT NULL DEFAULT (date('now')),
+            description TEXT,
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+        )
+    `);
+
+    // ────────────────────────────────────────
+    // Tablas existentes (compatibilidad legacy)
+    // ────────────────────────────────────────
+
     await db.execute(`
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,6 +121,7 @@ async function initDB() {
             currency TEXT NOT NULL DEFAULT 'UYU'
         )
     `);
+
     await db.execute(`
         CREATE TABLE IF NOT EXISTS expense_splits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,6 +131,7 @@ async function initDB() {
             FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
         )
     `);
+
     await db.execute(`
         CREATE TABLE IF NOT EXISTS recurring_expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +143,7 @@ async function initDB() {
             next_due_date TEXT NOT NULL
         )
     `);
+
     await db.execute(`
         CREATE TABLE IF NOT EXISTS currencies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +155,74 @@ async function initDB() {
         )
     `);
 
-    // Insertar monedas predeterminadas si no existen
+    // ────────────────────────────────────────
+    // Seed: usuarios por defecto
+    // ────────────────────────────────────────
+
+    // Hash simple como placeholder para bcrypt
+    function simpleHash(text) {
+        let hash = 0;
+        for (let i = 0; i < text.length; i++) {
+            const ch = text.charCodeAt(i);
+            hash = ((hash << 5) - hash) + ch;
+            hash = hash & hash;
+        }
+        return `simple:${Math.abs(hash).toString(16)}`;
+    }
+
+    const defaultUsers = [
+        { username: 'tin', password_hash: simpleHash(process.env.AUTH_TIN || 'tin'), role: 'admin', payer: 'me' },
+        { username: 'noe', password_hash: simpleHash(process.env.AUTH_NOE || 'noe'), role: 'member', payer: 'partner' },
+    ];
+
+    for (const u of defaultUsers) {
+        await db.execute({
+            sql: 'INSERT OR IGNORE INTO users (username, password_hash, role, payer) VALUES (?, ?, ?, ?)',
+            args: [u.username, u.password_hash, u.role, u.payer],
+        });
+    }
+
+    // ────────────────────────────────────────
+    // Seed: grupo por defecto "Casa"
+    // ────────────────────────────────────────
+
+    // Solo crear "Casa" si no existe ya un grupo con ese nombre para tin
+    const existingCasa = await db.execute(`
+        SELECT g.id FROM groups g
+        JOIN users u ON g.owner_id = u.id
+        WHERE g.name = 'Casa' AND u.username = 'tin'
+        LIMIT 1
+    `);
+    if (existingCasa.rows.length === 0) {
+        await db.execute(`
+            INSERT INTO groups (name, owner_id, base_currency)
+            SELECT 'Casa', id, 'UYU'
+            FROM users
+            WHERE username = 'tin'
+            LIMIT 1
+        `);
+    }
+
+    // Solo agregar miembros si no existen ya
+    const casaGroup = await db.execute(`
+        SELECT id FROM groups WHERE name = 'Casa' AND owner_id = (SELECT id FROM users WHERE username = 'tin') LIMIT 1
+    `);
+    if (casaGroup.rows.length > 0) {
+        const casaId = casaGroup.rows[0].id;
+        await db.execute({
+            sql: 'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, (SELECT id FROM users WHERE username = ?), ?)',
+            args: [casaId, 'tin', 'admin']
+        });
+        await db.execute({
+            sql: 'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, (SELECT id FROM users WHERE username = ?), ?)',
+            args: [casaId, 'noe', 'member']
+        });
+    }
+
+    // ────────────────────────────────────────
+    // Seed: monedas predeterminadas
+    // ────────────────────────────────────────
+
     const defaultCurrencies = [
         { code: 'UYU', name: 'Peso uruguayo', rate: 1, symbol: '$', is_default: 1 },
         { code: 'USD', name: 'Dólar estadounidense', rate: 0.0245, symbol: 'US$' },
@@ -70,23 +243,26 @@ async function initDB() {
         });
     }
 
-    // Asegurar que siempre haya una moneda default
     await db.execute('UPDATE currencies SET is_default = 0 WHERE code != ?', ['UYU']);
     await db.execute('UPDATE currencies SET is_default = 1 WHERE code = ?', ['UYU']);
-    const check = await db.execute('SELECT code, is_default FROM currencies WHERE code = ?', ['UYU']);
-    console.log('[DB] UYU is_default:', check.rows[0].is_default);
 
-    // Migrar: agregar columna currency si no existe
+    // ────────────────────────────────────────
+    // Migración: columna currency en expenses
+    // ────────────────────────────────────────
+
     try {
         await db.execute('ALTER TABLE expenses ADD COLUMN currency TEXT NOT NULL DEFAULT \'UYU\'');
         console.log('[DB] Columna currency agregada a expenses');
     } catch (e) {
-        if (!e.message.toLowerCase().includes('duplicate')) {
-            console.log('[DB] Columna currency puede que ya exista:', e.message.substring(0, 60));
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna currency puede que ya exista');
         }
     }
 
-    // Migrar splits para gastos existentes que no tengan splits
+    // ────────────────────────────────────────
+    // Migración: splits para gastos existentes
+    // ────────────────────────────────────────
+
     const existing = await db.execute('SELECT id, amount FROM expenses');
     for (const row of existing.rows) {
         const splitsCheck = await db.execute('SELECT COUNT(*) as count FROM expense_splits WHERE expense_id = ?', [row.id]);
@@ -98,9 +274,8 @@ async function initDB() {
             });
         }
     }
-    console.log('[DB] Migración de splits completada');
 
-    console.log('[DB] Tablas inicializadas: expenses, expense_splits, recurring_expenses, currencies');
+    console.log('[DB] Tablas inicializadas: users, sessions, groups, group_members, group_expenses, group_splits, group_payments, expenses, expense_splits, recurring_expenses, currencies');
 }
 
 initDB().catch(err => {

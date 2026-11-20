@@ -3,14 +3,10 @@ const defaultTheme = 'github';
 let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;
-let historyFilters = {
-    search: '',
-    category: '',
-    payer: '',
-    month: ''
-};
-
+let historyFilters = { search: '', category: '', payer: '', month: '' };
 let currentUser = null;
+let currentGroupId = null;
+let currentGroupName = null;
 let currentSplitMode = 'equal';
 
 document.documentElement.setAttribute('data-bs-theme', localStorage.getItem(themeKey) || defaultTheme);
@@ -21,1149 +17,386 @@ function changeTheme(theme) {
 }
 
 function formatCurrency(value) {
-    return new Intl.NumberFormat('es-UY', {
-        style: 'currency',
-        currency: 'UYU',
-        maximumFractionDigits: 0
-    }).format(Number(value || 0));
+    return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-function formatCurrencyCode(code, amount) {
-    const symbols = {
-        'UYU': '$', 'USD': 'US$', 'BRL': 'R$', 'EUR': '€',
-        'ARS': 'AR$', 'CLP': 'CL$', 'MXN': 'MX$', 'COP': 'CO$', 'PEN': 'S/'
-    };
-    const symbol = symbols[code] || '$';
-    return `${symbol}${Math.round(amount || 0).toLocaleString('es-UY')}`;
+function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 }
 
-function getCurrencySymbol(code) {
-    const symbols = {
-        'UYU': '$', 'USD': 'US$', 'BRL': 'R$', 'EUR': '€',
-        'ARS': 'AR$', 'CLP': 'CL$', 'MXN': 'MX$', 'COP': 'CO$', 'PEN': 'S/'
-    };
-    return symbols[code] || '$';
+// ── API ──
+async function apiGet(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`API ${url}: ${res.status}`);
+    return res.json();
+}
+async function apiPost(url, body) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+}
+async function apiDelete(url) {
+    const res = await fetch(url, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
 }
 
-function formatDate(value) {
-    if (!value) return 'Sin fecha';
-
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return new Intl.DateTimeFormat('es-UY', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-    }).format(date);
-}
-
-function parseExpenseDate(value) {
-    if (!value) return null;
-
-    const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function payerName(payer) {
-    if (payer === 'me') return 'Tin';
-    if (payer === 'partner') return 'Noe';
-    return payer || 'Sin pagador';
-}
-
-function categoryName(category) {
-    return category || 'Otros';
-}
-
-function setSubmitState(isSaving) {
-    const button = document.getElementById('submit-expense');
-    if (!button) return;
-
-    isSubmittingExpense = isSaving;
-    button.disabled = isSaving;
-    button.textContent = isSaving ? 'Guardando...' : 'Agregar gasto';
-}
-
-async function submitExpense(amount, description) {
-    if (isSubmittingExpense) return;
-
-    const parsedAmount = parseFloat(amount);
-    const cleanDescription = description ? description.trim() : '';
-
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        Swal.fire('Atención', 'El monto debe ser un número válido mayor a cero.', 'warning');
-        return;
-    }
-
-    if (!cleanDescription) {
-        Swal.fire('Atención', 'La descripción no puede estar vacía.', 'warning');
-        return;
-    }
-
-    const splitMode = document.querySelector('input[name="split_mode"]:checked')?.value || 'equal';
-    let body = {
-        amount: parsedAmount,
-        description: cleanDescription,
-        category: document.getElementById('expenseCategory').value,
-        payer: document.getElementById('expensePayer').value,
-        currency: document.getElementById('expenseCurrency').value,
-        date: new Date().toISOString().split('T')[0],
-        split_mode: splitMode
-    };
-
-    if (splitMode === 'custom') {
-        const meInput = document.getElementById('splitMe');
-        const partnerInput = document.getElementById('splitPartner');
-        const meAmount = parseFloat(meInput.value || 0);
-        const partnerAmount = parseFloat(partnerInput.value || 0);
-        const calculatedPartner = parsedAmount - meAmount;
-
-        if (isNaN(meAmount) || meAmount < 0 || meAmount > parsedAmount) {
-            Swal.fire('Atención', 'El monto para Tin debe ser válido.', 'warning');
-            return;
-        }
-
-        const splits = [
-            { user_id: 'me', amount: meAmount },
-            { user_id: 'partner', amount: partnerAmount > 0 ? partnerAmount : calculatedPartner }
-        ];
-
-        const totalSplit = splits.reduce((sum, s) => sum + s.amount, 0);
-        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-            Swal.fire('Atención', `Los montos deben sumar exactamente $${parsedAmount}.`, 'warning');
-            return;
-        }
-
-        body.splits = splits;
-    }
-
-    setSubmitState(true);
-
+// ── Auth ──
+async function loadAuth() {
     try {
-        const response = await fetch('/api/expense', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
+        const data = await apiGet('/api/auth/check');
+        currentUser = { username: data.user, payer: data.payer, role: data.role };
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Error en el servidor');
+        if (data.groups && data.groups.length > 0) {
+            currentGroupId = data.defaultGroup ? data.defaultGroup.id : data.groups[0].id;
+            currentGroupName = data.defaultGroup ? data.defaultGroup.name : data.groups[0].name;
         }
 
-        document.getElementById('expense-form').reset();
-        document.getElementById('custom-split-section').style.display = 'none';
-        document.getElementById('splitMe').value = '';
-        document.getElementById('splitPartner').value = '';
-        currentSplitMode = 'equal';
-        Swal.fire('¡Éxito!', 'Gasto registrado con éxito', 'success');
-        await fetchHistory();
-        document.getElementById('expenseAmount').focus();
+        document.getElementById('login-screen').hidden = true;
+        document.getElementById('app-screen').hidden = false;
+        renderHeader();
+        renderGroupSelector();
+        loadExpenses();
     } catch (err) {
-        console.error('Error de conexión:', err);
-        Swal.fire('Error', err.message || 'Error en el servidor al guardar el gasto.', 'error');
+        document.getElementById('login-screen').hidden = false;
+        document.getElementById('app-screen').hidden = true;
+        const errEl = document.getElementById('login-error');
+        if (errEl) errEl.textContent = err.message;
+    }
+}
+
+function logout() {
+    document.cookie = 'session_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    window.location.reload();
+}
+
+function renderHeader() {
+    const el = document.getElementById('user-display-name');
+    if (el && currentUser) {
+        el.textContent = currentUser.username.charAt(0).toUpperCase() + currentUser.username.slice(1);
+    }
+}
+
+function renderGroupSelector() {
+    fetch('/api/auth/check')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.groups || data.groups.length === 0) return;
+            const selector = document.getElementById('group-selector');
+            if (!selector) return;
+            const current = data.groups.find(g => g.id == currentGroupId) || data.groups[0];
+            currentGroupId = current.id;
+            currentGroupName = current.name;
+            selector.innerHTML = data.groups.map(g =>
+                `<option value="${g.id}" ${g.id == currentGroupId ? 'selected' : ''}>${g.name}</option>`
+            ).join('');
+            selector.onchange = () => {
+                currentGroupId = parseInt(selector.value);
+                loadExpenses();
+            };
+        })
+        .catch(e => console.error('[APP] Group selector error:', e));
+}
+
+// ── Expenses ──
+async function loadExpenses() {
+    if (!currentGroupId) return;
+    try {
+        const data = await apiGet(`/api/groups/${currentGroupId}/expenses`);
+        allExpenses = data;
+        renderExpenses();
+        renderBalance();
+        updateChart();
+        populateMonthFilter();
+    } catch (err) {
+        console.error('[APP] Failed to load expenses:', err);
+    }
+}
+
+function populateMonthFilter() {
+    const monthFilter = document.getElementById('month-filter');
+    if (!monthFilter) return;
+    const months = [...new Set(allExpenses.map(e => e.date?.substring(0, 7)))].filter(Boolean).sort().reverse();
+    monthFilter.innerHTML = '<option value="">Todos los meses</option>' +
+        months.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+async function addExpense(formData) {
+    if (isSubmittingExpense) return;
+    isSubmittingExpense = true;
+    try {
+        let splits = [];
+        const amount = parseFloat(formData.amount);
+        const otherUser = currentUser.username === 'tin' ? 'noe' : 'tin';
+
+        if (currentSplitMode === 'equal') {
+            splits = [
+                { user_id: currentUser.username, amount: amount / 2 },
+                { user_id: otherUser, amount: amount / 2 }
+            ];
+        } else if (currentSplitMode === 'solo') {
+            splits = [{ user_id: formData.payer, amount }];
+        } else if (formData.customSplits) {
+            splits = JSON.parse(formData.customSplits);
+        }
+
+        await apiPost(`/api/groups/${currentGroupId}/expenses`, {
+            date: formData.date,
+            description: formData.description,
+            amount: amount,
+            payer: formData.payer,
+            category: formData.category,
+            currency: 'UYU',
+            split_mode: currentSplitMode,
+            splits: splits
+        });
+        await loadExpenses();
+        // Reset form
+        document.getElementById('expense-description').value = '';
+        document.getElementById('expense-amount').value = '';
+    } catch (err) {
+        console.error('[APP] Failed to add expense:', err);
+        alert(err.message);
     } finally {
-        setSubmitState(false);
+        isSubmittingExpense = false;
     }
 }
 
-function processCategoryData(data) {
-    const categoryTotals = {};
+async function deleteExpense(expenseId) {
+    if (!confirm('¿Eliminar este gasto?')) return;
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}/expenses/${expenseId}`);
+        await loadExpenses();
+    } catch (err) {
+        console.error('[APP] Failed to delete expense:', err);
+        alert(err.message);
+    }
+}
 
-    data.forEach(item => {
-        const category = categoryName(item.category);
-        categoryTotals[category] = (categoryTotals[category] || 0) + parseFloat(item.amount || 0);
+function renderExpenses() {
+    const container = document.getElementById('expense-list');
+    if (!container) return;
+
+    let filtered = allExpenses.filter(e => {
+        if (historyFilters.search && !e.description.toLowerCase().includes(historyFilters.search.toLowerCase())) return false;
+        if (historyFilters.category && e.category !== historyFilters.category) return false;
+        if (historyFilters.payer && e.payer !== historyFilters.payer) return false;
+        if (historyFilters.month) {
+            const m = e.date.substring(0, 7);
+            if (m !== historyFilters.month) return false;
+        }
+        return true;
     });
 
-    const defaultCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
-    const labels = defaultCategories;
-    const values = labels.map(category => categoryTotals[category] || 0);
-
-    return {
-        labels,
-        values,
-        total: values.reduce((sum, value) => sum + value, 0),
-        topCategory: getTopCategoryFromTotals(categoryTotals)
-    };
-}
-
-function getTopCategoryFromTotals(categoryTotals) {
-    const entries = Object.entries(categoryTotals).filter(([, total]) => total > 0);
-    if (entries.length === 0) return null;
-
-    return entries.sort((a, b) => b[1] - a[1])[0];
-}
-
-function updateChart(data) {
-    const canvas = document.getElementById('categoryChart');
-    const emptyState = document.getElementById('chart-empty');
-    const chartSummary = document.getElementById('chart-summary');
-    if (!canvas || typeof Chart === 'undefined') return;
-
-    const processedData = processCategoryData(data);
-
-    if (categoryChartInstance) {
-        categoryChartInstance.destroy();
-        categoryChartInstance = null;
-    }
-
-    if (processedData.total <= 0) {
-        canvas.hidden = true;
-        if (emptyState) emptyState.hidden = false;
-        if (chartSummary) chartSummary.textContent = 'Sin datos para comparar todavía.';
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center py-5 text-muted"><p>No hay gastos registrados</p></div>';
         return;
     }
 
-    canvas.hidden = false;
-    if (emptyState) emptyState.hidden = true;
+    container.innerHTML = filtered.map(expense => {
+        const isMe = expense.payer === currentUser.username;
+        const meSplit = expense.splits && expense.splits.length > 0
+            ? expense.splits.find(s => s.user_id === currentUser.username)?.amount || expense.amount / 2
+            : expense.amount / 2;
 
-    if (chartSummary && processedData.topCategory) {
-        const [category, total] = processedData.topCategory;
-        chartSummary.textContent = `${category} concentra ${formatCurrency(total)}.`;
-    }
-
-    categoryChartInstance = new Chart(canvas.getContext('2d'), {
-        type: 'doughnut',
-        data: {
-            labels: processedData.labels,
-            datasets: [{
-                data: processedData.values,
-                backgroundColor: ['#2f80ed', '#27ae60', '#f2c94c', '#9b51e0', '#eb5757'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                },
-                tooltip: {
-                    callbacks: {
-                        label: context => {
-                            const label = context.label || 'Categoría';
-                            return `${label}: ${formatCurrency(context.parsed)}`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-function escapeHtml(value) {
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function renderHistory(items) {
-    const historyBody = document.getElementById('history-body');
-    updateHistoryCount(items.length);
-
-    if (items.length === 0) {
-        historyBody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay gastos que coincidan con esos filtros.</td></tr>';
-        return;
-    }
-
-    historyBody.innerHTML = items.map(item => {
-        const paidBy = payerName(item.payer);
-        const currencyCode = escapeHtml(item.currency || 'UYU');
-        const currencySymbol = getCurrencySymbol(currencyCode);
-        const amountFormatted = `${currencySymbol}${Math.round(item.amount).toLocaleString('es-UY')}`;
-
-        let distributionText = '';
-
-        if (item.splits && item.splits.length > 0) {
-            const meSplit = item.splits.find(s => s.user_id === 'me');
-            const partnerSplit = item.splits.find(s => s.user_id === 'partner');
-            const meAmountFormatted = meSplit ? `${currencySymbol}${Math.round(meSplit.amount).toLocaleString('es-UY')}` : '-';
-            const partnerAmountFormatted = partnerSplit ? `${currencySymbol}${Math.round(partnerSplit.amount).toLocaleString('es-UY')}` : '-';
-
-            if (item.splits.length === 1 && meSplit && meSplit.amount === item.amount) {
-                distributionText = `<span class="history-distribution">Solo pagó ${payerName(item.payer)}</span>`;
-            } else if (item.splits.length === 1) {
-                const other = item.splits[0].user_id === 'me' ? 'Tin' : 'Noe';
-                distributionText = `<span class="history-distribution">Solo ${other}</span>`;
-            } else {
-                distributionText = `<span class="distribution-badge">${meAmountFormatted} / ${partnerAmountFormatted}</span>`;
-            }
-        }
-        
         return `
-            <tr>
-                <td>${escapeHtml(formatDate(item.date))}</td>
-                <td class="fw-medium">${escapeHtml(item.description || 'Sin descripción')}</td>
-                <td><span class="category-pill">${escapeHtml(categoryName(item.category))}</span></td>
-                <td class="text-end fw-semibold">${escapeHtml(amountFormatted)}</td>
-                <td><span class="currency-badge">${currencyCode}</span></td>
-                <td><span class="payer-pill payer-${escapeHtml(item.payer || 'unknown')}">${escapeHtml(paidBy)}</span></td>
-                <td><div>${distributionText}</div></td>
-                <td class="text-end history-actions">
-                    <button class="btn btn-sm btn-outline-primary" onclick="editExpense(${item.id})" title="Editar">Editar</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteExpense(${item.id})" title="Eliminar">Eliminar</button>
-                </td>
-            </tr>
-        `;
+            <div class="expense-card mb-2 p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="text-muted small">${expense.category || 'Sin categoría'}</div>
+                        <div>${expense.description || 'Sin descripción'}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold">${formatCurrency(expense.amount)}</div>
+                        <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="deleteExpense(${expense.id})">Eliminar</button>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between small text-muted mt-2">
+                    <span>${formatDate(expense.date)} — ${isMe ? 'Pagaste' : 'Pagó ' + (expense.payer === 'tin' ? 'Tin' : 'Noe')}</span>
+                    <span>Tu parte: ${formatCurrency(meSplit)}</span>
+                </div>
+            </div>`;
     }).join('');
 }
 
-function updateHistoryCount(count) {
-    const countElement = document.getElementById('history-count');
-    if (!countElement) return;
+function renderBalance() {
+    const container = document.getElementById('balance-display');
+    if (!container) return;
 
-    countElement.textContent = count === 1 ? '1 gasto' : `${count} gastos`;
-}
-
-function buildBalanceMessage(summary) {
-    if (!summary) return 'Sin información de saldo.';
-
-    const balance = Number(summary.balance || 0);
-    if (balance === 0) return 'Están a mano.';
-
-    if (summary.status === 'Te deben') {
-        return `Noe le debe ${formatCurrency(balance)} a Tin.`;
-    }
-
-    return `Tin le debe ${formatCurrency(balance)} a Noe.`;
-}
-
-function updateSummary(summary, items) {
-    document.getElementById('expense-count').textContent = items.length;
-    updateComputedMetrics(items);
-
-    if (!summary) {
-        document.getElementById('debt-status').textContent = 'Sin información de saldo.';
-        document.getElementById('balance-text').textContent = formatCurrency(0);
-        document.getElementById('total-me').textContent = formatCurrency(0);
-        document.getElementById('total-partner').textContent = formatCurrency(0);
-        return;
-    }
-
-    document.getElementById('debt-status').textContent = buildBalanceMessage(summary);
-    document.getElementById('balance-text').textContent = formatCurrency(summary.balance);
-    document.getElementById('total-me').textContent = formatCurrency(summary.totalMe);
-    document.getElementById('total-partner').textContent = formatCurrency(summary.totalPartner);
-}
-
-function updateComputedMetrics(items) {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const categoryTotals = {};
-
-    let totalSpent = 0;
-    let monthTotal = 0;
-
-    items.forEach(item => {
-        const amount = Number(item.amount || 0);
-        const expenseDate = parseExpenseDate(item.date);
-
-        totalSpent += amount;
-        categoryTotals[categoryName(item.category)] = (categoryTotals[categoryName(item.category)] || 0) + amount;
-
-        if (expenseDate && expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear) {
-            monthTotal += amount;
-        }
-    });
-
-    const topCategory = getTopCategoryFromTotals(categoryTotals);
-
-    document.getElementById('total-spent').textContent = formatCurrency(totalSpent);
-    document.getElementById('month-total').textContent = formatCurrency(monthTotal);
-    document.getElementById('top-category').textContent = topCategory ? topCategory[0] : '-';
-}
-
-async function fetchHistory() {
-    const historyBody = document.getElementById('history-body');
-
-    try {
-        const response = await fetch('/api/expenses');
-        if (!response.ok) throw new Error('Error en la red: ' + response.status);
-
-        const data = await response.json();
-        allExpenses = data.expenses || [];
-        hydrateHistoryFilterOptions();
-        applyHistoryFilters();
-        updateChart(allExpenses);
-        updateSummary(data.summary, allExpenses);
-    } catch (error) {
-        console.error('Error en fetchHistory:', error);
-        Swal.fire('Error', 'No se pudo cargar el historial de gastos.', 'error');
-        historyBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Error al cargar historial.</td></tr>';
-    }
-}
-
-function applyHistoryFilters() {
-    const query = historyFilters.search.trim().toLowerCase();
-
-    const filteredExpenses = allExpenses.filter(item => {
-        const matchesSearch = !query || [
-            item.description,
-            categoryName(item.category),
-            payerName(item.payer),
-            item.date,
-            item.amount
-        ].some(value => String(value || '').toLowerCase().includes(query));
-
-        const matchesCategory = !historyFilters.category || categoryName(item.category) === historyFilters.category;
-        const matchesCurrency = !historyFilters.currency || (item.currency || 'UYU') === historyFilters.currency;
-        const matchesPayer = !historyFilters.payer || item.payer === historyFilters.payer;
-        const matchesMonth = !historyFilters.month || (item.date && item.date.startsWith(historyFilters.month));
-
-        return matchesSearch && matchesCategory && matchesCurrency && matchesPayer && matchesMonth;
-    });
-
-    renderHistory(filteredExpenses);
-}
-
-function filterHistory(searchValue) {
-    historyFilters.search = searchValue;
-    applyHistoryFilters();
-}
-
-function setCategoryFilter(category) {
-    historyFilters.category = category;
-    applyHistoryFilters();
-}
-
-function setPayerFilter(payer) {
-    historyFilters.payer = payer;
-    applyHistoryFilters();
-}
-
-function setMonthFilter(month) {
-    historyFilters.month = month;
-    applyHistoryFilters();
-}
-
-function hydrateHistoryFilterOptions() {
-    const categoryFilter = document.getElementById('category-filter');
-    const monthFilter = document.getElementById('month-filter');
-    const currencyFilter = document.getElementById('currency-filter');
-
-    if (currencyFilter) {
-        const currencies = Array.from(new Set(allExpenses.map(item => item.currency || 'UYU'))).sort();
-        const selectedCurrency = currencyFilter.value;
-
-        currencyFilter.innerHTML = '<option value="">Todas las monedas</option>' + currencies.map(code => {
-            const symbol = getCurrencySymbol(code);
-            return `<option value="${code}">${symbol || code} - ${code}</option>`;
-        }).join('');
-
-        currencyFilter.value = currencies.includes(selectedCurrency) ? selectedCurrency : '';
-        historyFilters.currency = currencyFilter.value;
-    }
-
-    if (categoryFilter) {
-        const categories = Array.from(new Set(allExpenses.map(item => categoryName(item.category)))).sort();
-        const selectedCategory = categoryFilter.value;
-
-        categoryFilter.innerHTML = '<option value="">Todas las categorías</option>' + categories.map(category => {
-            return `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`;
-        }).join('');
-
-        categoryFilter.value = categories.includes(selectedCategory) ? selectedCategory : '';
-        historyFilters.category = categoryFilter.value;
-    }
-
-    if (monthFilter) {
-        const months = Array.from(new Set(allExpenses
-            .filter(item => item.date)
-            .map(item => item.date.substring(0, 7))
-        )).sort().reverse();
-
-        const selectedMonth = monthFilter.value;
-
-        monthFilter.innerHTML = '<option value="">Todos los meses</option>' + months.map(month => {
-            const [year, m] = month.split('-');
-            const label = new Date(year, parseInt(m) - 1).toLocaleDateString('es-UY', { year: 'numeric', month: 'long' });
-            return `<option value="${month}">${label}</option>`;
-        }).join('');
-
-        monthFilter.value = months.includes(selectedMonth) ? selectedMonth : '';
-        historyFilters.month = monthFilter.value;
-    }
-}
-
-async function checkAuth() {
-    try {
-        const res = await fetch('/api/auth/check');
-        if (!res.ok) {
-            throw new Error();
-        }
-        const data = await res.json();
-        currentUser = data;
-        document.getElementById('login-screen').hidden = true;
-        document.getElementById('app-main').hidden = false;
-        document.getElementById('user-label').textContent = data.user === 'tin' ? 'Tin' : 'Noe';
-        const payerSelect = document.getElementById('expensePayer');
-        if (payerSelect) payerSelect.value = data.payer;
-        initApp();
-    } catch (err) {
-        currentUser = null;
-        document.getElementById('login-screen').hidden = false;
-        document.getElementById('app-main').hidden = true;
-        checkGoogleAuthAvailability();
-    }
-}
-
-async function checkGoogleAuthAvailability() {
-    try {
-        const res = await fetch('/api/google/init', { method: 'POST' });
-        const googleSection = document.getElementById('google-login-section');
-        if (res.ok && googleSection) {
-            googleSection.hidden = false;
-        } else if (googleSection) {
-            googleSection.hidden = true;
-        }
-    } catch (err) {
-        const googleSection = document.getElementById('google-login-section');
-        if (googleSection) {
-            googleSection.hidden = true;
-        }
-    }
-}
-
-async function loginUser(username, password, feedbackEl) {
-    feedbackEl.textContent = 'Conectando...';
-    feedbackEl.classList.add('text-info');
-    try {
-        const res = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ username, password })
-        });
-
-        if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            feedbackEl.textContent = data.error || 'Credenciales inválidas';
-            feedbackEl.classList.add('text-danger');
-            return;
-        }
-
-        feedbackEl.textContent = '';
-        feedbackEl.classList.remove('text-danger');
-        await checkAuth();
-    } catch (err) {
-        console.error('[LOGIN] Error:', err);
-        feedbackEl.textContent = 'Error de conexión con el servidor';
-        feedbackEl.classList.add('text-danger');
-    }
-}
-
-async function logoutUser() {
-    await fetch('/api/logout', { method: 'POST' });
-    currentUser = null;
-    document.getElementById('login-screen').hidden = true;
-    document.getElementById('app-main').hidden = true;
-}
-
-async function handleGoogleCallbackRedirect(code, state) {
-    try {
-        const res = await fetch(`/api/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
-        if (!res.ok) {
-            const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Error en el callback de Google');
-        }
-        const data = await res.json();
-        currentUser = data;
-        document.getElementById('login-screen').hidden = true;
-        document.getElementById('app-main').hidden = false;
-        document.getElementById('user-label').textContent = data.user === 'tin' ? 'Tin' : 'Noe';
-        const payerSelect = document.getElementById('expensePayer');
-        if (payerSelect) payerSelect.value = data.payer;
-        
-        // Limpiar URL de params
-        const url = new URL(window.location);
-        url.searchParams.delete('code');
-        url.searchParams.delete('state');
-        window.history.replaceState({}, document.title, url.pathname + url.search);
-        
-        initApp();
-    } catch (err) {
-        console.error('[GOOGLE CALLBACK] Error:', err);
-        currentUser = null;
-        document.getElementById('login-screen').hidden = false;
-        document.getElementById('app-main').hidden = true;
-        Swal.fire('Error', err.message || 'No se pudo completar el login con Google.', 'error');
-    }
-}
-
-async function loginWithGoogle() {
-    try {
-        const res = await fetch('/api/google/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ origin: window.location.origin })
-        });
-        if (!res.ok) {
-            throw new Error('No se pudo iniciar sesion con Google');
-        }
-        const data = await res.json();
-        window.location.href = data.redirectUrl;
-    } catch (err) {
-        console.error('[GOOGLE LOGIN] Error:', err);
-        Swal.fire('Error', 'No se pudo iniciar sesion con Google. Verifica la configuracion.', 'error');
-    }
-}
-
-let editModalInstance = null;
-
-function openEditModal() {
-    if (editModalInstance) {
-        editModalInstance.show();
-    }
-}
-
-function closeEditModal() {
-    if (editModalInstance) {
-        editModalInstance.hide();
-    }
-    document.getElementById('edit-form').reset();
-}
-
-async function editExpense(id) {
-    try {
-        const expense = allExpenses.find(item => Number(item.id) === Number(id));
-        if (!expense) {
-            Swal.fire('Error', 'Gasto no encontrado.', 'error');
-            return;
-        }
-
-        document.getElementById('edit-id').value = expense.id;
-        document.getElementById('editDate').value = expense.date;
-        document.getElementById('editDescription').value = expense.description;
-        document.getElementById('editAmount').value = expense.amount;
-        document.getElementById('editCategory').value = expense.category || 'Otros';
-        document.getElementById('editPayer').value = expense.payer || 'me';
-        document.getElementById('editCurrency').value = expense.currency || 'UYU';
-
-        if (expense.splits && expense.splits.length > 0) {
-            const meSplit = expense.splits.find(s => s.user_id === 'me');
-            const partnerSplit = expense.splits.find(s => s.user_id === 'partner');
-            let detectedMode = 'equal';
-
-            if (expense.splits.length === 1) {
-                detectedMode = 'solo';
-            } else if (meSplit && partnerSplit && Math.abs(meSplit.amount - expense.amount / 2) > 0.01) {
-                detectedMode = 'custom';
-            }
-
-            const modeRadio = document.querySelector(`input[name="edit_split_mode"][value="${detectedMode}"]`);
-            if (modeRadio) modeRadio.checked = true;
-
-            const editCustomSplitSection = document.getElementById('edit-custom-split-section');
-            if (detectedMode === 'custom') {
-                editCustomSplitSection.style.display = 'block';
-                document.getElementById('editSplitMe').value = meSplit ? meSplit.amount : '';
-                const partnerAmount = partnerSplit ? partnerSplit.amount : (expense.amount - (meSplit ? meSplit.amount : 0));
-                document.getElementById('editSplitPartner').value = partnerAmount;
-            } else {
-                editCustomSplitSection.style.display = 'none';
-            }
+    let totalPaid = 0, totalOwed = 0;
+    allExpenses.forEach(expense => {
+        const meSplit = expense.splits && expense.splits.length > 0
+            ? expense.splits.find(s => s.user_id === currentUser.username)?.amount || 0
+            : expense.amount / 2;
+        if (expense.payer === currentUser.username) {
+            totalPaid += expense.amount - meSplit;
         } else {
-            document.querySelector('input[name="edit_split_mode"][value="equal"]').checked = true;
-            document.getElementById('edit-custom-split-section').style.display = 'none';
+            totalOwed += expense.amount - meSplit;
         }
+    });
 
-        if (editModalInstance) {
-            editModalInstance.show();
-        }
-    } catch (err) {
-        console.error('Error al abrir modal de edici\u00f3n:', err);
-        Swal.fire('Error', 'No se pudo cargar el gasto para editar.', 'error');
+    const balance = totalPaid - totalOwed;
+    container.innerHTML = `
+        <div class="row text-center">
+            <div class="col-4">
+                <div class="balance-label">Pagaste</div>
+                <div class="balance-amount">${formatCurrency(totalPaid)}</div>
+            </div>
+            <div class="col-4">
+                <div class="balance-label">Deben</div>
+                <div class="balance-amount ${balance > 0 ? 'text-success' : 'text-danger'}">${formatCurrency(Math.abs(balance))}</div>
+            </div>
+            <div class="col-4">
+                <div class="balance-label">${balance >= 0 ? 'Te deben' : 'Debes'}</div>
+                <div class="balance-amount ${balance >= 0 ? 'text-success' : 'text-danger'}">${balance >= 0 ? '→' : '←'}</div>
+            </div>
+        </div>`;
+}
+
+// ── Chart ──
+function updateChart() {
+    const chartEl = document.getElementById('category-chart');
+    if (!chartEl) return;
+
+    const categoryTotals = {};
+    allExpenses.forEach(e => {
+        const cat = e.category || 'Otros';
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + e.amount;
+    });
+
+    const labels = Object.keys(categoryTotals);
+    const data = Object.values(categoryTotals);
+    const colors = ['#6990B7', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF'];
+
+    if (categoryChartInstance) categoryChartInstance.destroy();
+
+    categoryChartInstance = new Chart(chartEl.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{ data, backgroundColor: colors.slice(0, labels.length) }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { padding: 10 } } } }
+    });
+}
+
+// ── Form ──
+function updateSplitDisplay() {
+    const display = document.getElementById('split-display');
+    if (!display) return;
+    const amount = parseFloat(document.getElementById('expense-amount')?.value || 0);
+
+    if (currentSplitMode === 'equal') {
+        display.innerHTML = `<p class="text-muted">División: cada uno paga <strong>${formatCurrency(amount / 2)}</strong></p>`;
+    } else if (currentSplitMode === 'solo') {
+        const payerLabel = document.getElementById('expense-payer')?.value === 'me' ? 'Tú' : 'Tu pareja';
+        display.innerHTML = `<p class="text-muted"><strong>${payerLabel}</strong> paga todo: <strong>${formatCurrency(amount)}</strong></p>`;
+    } else {
+        display.innerHTML = `
+            <div class="row">
+                <div class="col-6"><label class="small">Tu parte (UR$)</label><input type="number" id="split-me" class="form-control" placeholder="0" step="100"></div>
+                <div class="col-6"><label class="small">Parte pareja (UR$)</label><input type="number" id="split-partner" class="form-control" placeholder="0" step="100"></div>
+            </div>`;
     }
 }
 
-async function saveExpenseUpdate() {
-    const id = document.getElementById('edit-id').value;
-    const date = document.getElementById('editDate').value;
-    const description = document.getElementById('editDescription').value;
-    const amount = document.getElementById('editAmount').value;
-    const category = document.getElementById('editCategory').value;
-    const payer = document.getElementById('editPayer').value;
-    const currency = document.getElementById('editCurrency').value;
+function submitExpense() {
+    const description = document.getElementById('expense-description');
+    const amount = document.getElementById('expense-amount');
+    const date = document.getElementById('expense-date');
+    const category = document.getElementById('expense-category');
+    const payer = document.getElementById('expense-payer');
 
-    if (!date) {
-        Swal.fire('Atenci\u00f3n', 'La fecha es obligatoria.', 'warning');
-        return;
-    }
+    if (!description || !amount || !date || !category || !payer) return;
 
-    const cleanDescription = description.trim();
-    if (!cleanDescription) {
-        Swal.fire('Atenci\u00f3n', 'La descripci\u00f3n no puede estar vac\u00eda.', 'warning');
-        return;
-    }
-
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        Swal.fire('Atenci\u00f3n', 'El monto debe ser un n\u00famero v\u00e1lido mayor a cero.', 'warning');
-        return;
-    }
-
-    const splitMode = document.querySelector('input[name="edit_split_mode"]:checked')?.value || 'equal';
-    let body = {
-        date,
-        description: cleanDescription,
-        amount: parsedAmount,
-        category,
-        payer,
-        currency: currency || 'UYU',
-        split_mode: splitMode
+    const formData = {
+        description: description.value,
+        amount: amount.value,
+        date: date.value,
+        category: category.value,
+        payer: payer.value,
+        currency: 'UYU'
     };
 
-    if (splitMode === 'custom') {
-        const meAmount = parseFloat(document.getElementById('editSplitMe').value || 0);
-        const partnerAmount = parseFloat(document.getElementById('editSplitPartner').value || 0);
-        const splits = [
-            { user_id: 'me', amount: meAmount },
-            { user_id: 'partner', amount: partnerAmount }
-        ];
-        const totalSplit = splits.reduce((sum, s) => sum + s.amount, 0);
-        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-            Swal.fire('Atenci\u00f3n', `Los montos deben sumar exactamente $${parsedAmount}.`, 'warning');
-            return;
-        }
-        body.splits = splits;
+    if (currentSplitMode === 'custom') {
+        formData.customSplits = JSON.stringify([
+            { user_id: currentUser.username, amount: parseFloat(document.getElementById('split-me')?.value || 0) },
+            { user_id: currentUser.username === 'tin' ? 'noe' : 'tin', amount: parseFloat(document.getElementById('split-partner')?.value || 0) }
+        ]);
     }
 
-    try {
-        const response = await fetch(`/api/expense/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Error en el servidor');
-        }
-
-        Swal.fire('\u00a1Actualizado!', 'Gasto actualizado con \u00e9xito', 'success');
-        closeEditModal();
-        await fetchHistory();
-    } catch (err) {
-        console.error('Error al actualizar gasto:', err);
-        Swal.fire('Error', err.message || 'No se pudo actualizar el gasto.', 'error');
-    }
+    addExpense(formData);
 }
 
-async function deleteExpense(id) {
-    const result = await Swal.fire({
-        title: '\u00bfEliminar gasto?',
-        text: 'Esta acci\u00f3no no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'S\u00ed, eliminar',
-        cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/expense/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Error en el servidor');
-        }
-
-        Swal.fire('\u00a1Eliminado!', 'Gasto eliminado correctamente.', 'success');
-        await fetchHistory();
-    } catch (err) {
-        console.error('Error al eliminar gasto:', err);
-        Swal.fire('Error', err.message || 'No se pudo eliminar el gasto.', 'error');
-    }
-}
-
-async function handleDeleteFromEditModal() {
-    const id = document.getElementById('edit-id').value;
-    if (!id) {
-        Swal.fire('Error', 'No hay gasto seleccionado.', 'error');
-        return;
-    }
-    closeEditModal();
-    await deleteExpense(id);
-}
-
-function initApp() {
-    const editModal = document.getElementById('editModal');
-    if (editModal) {
-        editModalInstance = new bootstrap.Modal(editModal);
-    }
-    fetchHistory();
-    loadRecurring();
-    loadVersion();
-}
-
+// ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
-    const form = document.getElementById('expense-form');
-    const searchInput = document.getElementById('search-input');
-    const categoryFilter = document.getElementById('category-filter');
-    const payerFilter = document.getElementById('payer-filter');
+    const dateInput = document.getElementById('expense-date');
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
-    if (form) {
-        form.addEventListener('submit', event => {
-            event.preventDefault();
-            submitExpense(
-                document.getElementById('expenseAmount').value,
-                document.getElementById('expenseDesc').value
-            );
-        });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', event => {
-            filterHistory(event.target.value);
-        });
-    }
-
-    if (categoryFilter) {
-        categoryFilter.addEventListener('change', event => {
-            setCategoryFilter(event.target.value);
-        });
-    }
-
-    if (payerFilter) {
-        payerFilter.addEventListener('change', event => {
-            setPayerFilter(event.target.value);
-        });
-    }
-
-    const monthFilter = document.getElementById('month-filter');
-    if (monthFilter) {
-        monthFilter.addEventListener('change', event => {
-            setMonthFilter(event.target.value);
-        });
-    }
-
-    const currencyFilter = document.getElementById('currency-filter');
-    if (currencyFilter) {
-        currencyFilter.addEventListener('change', event => {
-            historyFilters.currency = event.target.value;
-            applyHistoryFilters();
-        });
-    }
-
+    // Login form
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
-        loginForm.addEventListener('submit', event => {
-            event.preventDefault();
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            const feedback = document.getElementById('login-feedback');
-            loginUser(username, password, feedback);
-        });
-    }
-
-    const googleLoginBtn = document.getElementById('google-login-btn');
-    if (googleLoginBtn) {
-        googleLoginBtn.addEventListener('click', loginWithGoogle);
-    }
-
-    // Check if we're coming from Google OAuth callback
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('code') && urlParams.get('state')) {
-        handleGoogleCallbackRedirect(urlParams.get('code'), urlParams.get('state'));
-        return;
-    }
-
-    const editForm = document.getElementById('edit-form');
-    if (editForm) {
-        editForm.addEventListener('submit', event => {
-            event.preventDefault();
-            saveExpenseUpdate();
-        });
-    }
-
-    const editDeleteBtn = document.getElementById('delete-edit-btn');
-    if (editDeleteBtn) {
-        editDeleteBtn.addEventListener('click', handleDeleteFromEditModal);
-    }
-
-    const editModal = document.getElementById('editModal');
-    if (editModal) {
-        editModal.addEventListener('hidden.bs.modal', () => {
-            document.getElementById('edit-form').reset();
-        });
-    }
-
-    const splitModeRadios = document.querySelectorAll('input[name="split_mode"]');
-    const customSplitSection = document.getElementById('custom-split-section');
-
-    splitModeRadios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            currentSplitMode = e.target.value;
-            if (customSplitSection) {
-                customSplitSection.style.display = e.target.value === 'custom' ? 'block' : 'none';
-            }
-        });
-    });
-
-    const splitMeInput = document.getElementById('splitMe');
-    const splitPartnerInput = document.getElementById('splitPartner');
-    const splitTotalDisplay = document.getElementById('splitTotalDisplay');
-    const splitError = document.getElementById('splitError');
-
-    function updateSplitTotal() {
-        const meAmount = parseFloat(splitMeInput?.value || 0);
-        const amount = parseFloat(document.getElementById('expenseAmount')?.value || 0);
-        const partnerAmount = amount - meAmount;
-
-        if (isNaN(amount) || amount <= 0 || customSplitSection.style.display === 'none') {
-            if (splitPartnerInput) splitPartnerInput.value = '';
-            if (splitTotalDisplay) splitTotalDisplay.textContent = formatCurrency(0);
-            if (splitError) splitError.style.display = 'none';
-            return;
-        }
-
-        if (splitPartnerInput) splitPartnerInput.value = partnerAmount > 0 ? partnerAmount.toFixed(2) : '0';
-        if (splitTotalDisplay) splitTotalDisplay.textContent = formatCurrency(meAmount + (splitPartnerInput ? parseFloat(splitPartnerInput.value) || 0 : 0));
-        if (splitError) {
-            const total = meAmount + (splitPartnerInput ? parseFloat(splitPartnerInput.value) || 0 : 0);
-            splitError.style.display = Math.abs(total - amount) > 0.01 ? 'inline' : 'none';
-        }
-    }
-
-    if (splitMeInput) splitMeInput.addEventListener('input', updateSplitTotal);
-    if (splitPartnerInput) splitPartnerInput.addEventListener('input', updateSplitTotal);
-
-    const amountInput = document.getElementById('expenseAmount');
-    if (amountInput) amountInput.addEventListener('input', updateSplitTotal);
-
-    const editSplitModeRadios = document.querySelectorAll('input[name="edit_split_mode"]');
-    const editCustomSplitSection = document.getElementById('edit-custom-split-section');
-
-    editSplitModeRadios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            if (editCustomSplitSection) {
-                editCustomSplitSection.style.display = e.target.value === 'custom' ? 'block' : 'none';
-            }
-        });
-    });
-
-    const editSplitMeInput = document.getElementById('editSplitMe');
-    const editSplitPartnerInput = document.getElementById('editSplitPartner');
-    const editSplitTotalDisplay = document.getElementById('editSplitTotalDisplay');
-    const editSplitError = document.getElementById('editSplitError');
-
-    function updateEditSplitTotal() {
-        const meAmount = parseFloat(editSplitMeInput?.value || 0);
-        const partnerAmount = parseFloat(editSplitPartnerInput?.value || 0);
-        const total = meAmount + partnerAmount;
-
-        if (editSplitTotalDisplay) editSplitTotalDisplay.textContent = formatCurrency(total);
-        if (editSplitError) {
-            const amount = parseFloat(document.getElementById('editAmount')?.value || 0);
-            editSplitError.style.display = amount > 0 && Math.abs(total - amount) > 0.01 ? 'inline' : 'none';
-        }
-    }
-
-    if (editSplitMeInput) editSplitMeInput.addEventListener('input', updateEditSplitTotal);
-    if (editSplitPartnerInput) editSplitPartnerInput.addEventListener('input', updateEditSplitTotal);
-
-    checkAuth();
-});
-
-window.changeTheme = changeTheme;
-window.submitExpense = submitExpense;
-window.logoutUser = logoutUser;
-window.editExpense = editExpense;
-window.deleteExpense = deleteExpense;
-window.loginWithGoogle = loginWithGoogle;
-
-/* Recurring Expenses */
-let recurringCache = [];
-
-function getFreqLabel(freq) {
-    const map = {
-        'diario': 'Diario',
-        'semanal': 'Semanal',
-        'quincenal': 'Quincenal',
-        'mensual': 'Mensual',
-        'trimestral': 'Trimestral',
-        'anual': 'Anual'
-    };
-    return map[freq] || freq;
-}
-
-function renderRecurring(list) {
-    const container = document.getElementById('recurring-list');
-    if (!container) return;
-    recurringCache = list || [];
-
-    if (list.length === 0) {
-        container.innerHTML = '<p class="text-center text-muted empty-state">No hay gastos recurrentes configurados</p>';
-        return;
-    }
-
-    container.innerHTML = list.map(item => `
-        <div class="recurring-item" data-id="${item.id}">
-            <div class="recurring-info">
-                <p class="recurring-description">${escapeHtml(item.description)}</p>
-                <div class="recurring-meta">
-                    <span class="recurring-freq-badge">${getFreqLabel(item.frequency)}</span>
-                    <span>${escapeHtml(formatDate(item.next_due_date))}</span>
-                    <span>${escapeHtml(categoryName(item.category))}</span>
-                </div>
-            </div>
-            <div class="recurring-actions">
-                <span class="recurring-amount">${formatCurrency(item.amount)}</span>
-                <button class="btn btn-primary btn-recurring-add" title="Agregar este gasto al historial">
-                    Agregar
-                </button>
-                <button class="btn btn-recurring-delete" title="Eliminar">
-                    Eliminar
-                </button>
-            </div>
-        </div>
-    `).join('');
-
-    container.querySelectorAll('.recurring-item').forEach(row => {
-        const id = parseInt(row.dataset.id, 10);
-        row.querySelector('.btn-recurring-add').addEventListener('click', () => addRecurringExpense(id));
-        row.querySelector('.btn-recurring-delete').addEventListener('click', () => deleteRecurringExpense(id));
-    });
-}
-
-async function loadRecurring() {
-    try {
-        const res = await fetch('/api/recurring');
-        if (!res.ok) throw new Error('Error en la red');
-        const data = await res.json();
-        renderRecurring(data);
-    } catch (err) {
-        console.error('[RECURRING] Error al cargar:', err);
-    }
-}
-
-async function addRecurringExpense(id) {
-    const item = recurringCache.find(i => Number(i.id) === Number(id));
-    if (!item) {
-        Swal.fire('Error', 'Gasto recurrente no encontrado.', 'error');
-        return;
-    }
-
-    try {
-        await fetch('/api/expense', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                amount: item.amount,
-                description: item.description,
-                category: item.category,
-                payer: item.payer,
-                date: new Date().toISOString().split('T')[0],
-                split_mode: 'equal'
-            })
-        });
-
-        await fetch(`/api/recurring/${item.id}`, {
-            method: 'DELETE'
-        });
-
-        Swal.fire('¡Listo!', `Se agregó "${item.description}" al historial.`, 'success');
-        await fetchHistory();
-        await loadRecurring();
-    } catch (err) {
-        console.error('[RECURRING] Error:', err);
-        Swal.fire('Error', 'No se pudo agregar el gasto recurrente.', 'error');
-    }
-}
-
-async function deleteRecurringExpense(id) {
-    const result = await Swal.fire({
-        title: '¿Eliminar gasto recurrente?',
-        text: 'Se eliminará de la lista de recurrentes.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-        const res = await fetch(`/api/recurring/${id}`, {
-            method: 'DELETE'
-        });
-
-        if (!res.ok) throw new Error('Error al eliminar');
-
-        Swal.fire('¡Eliminado!', 'Gasto recurrente eliminado.', 'success');
-        await loadRecurring();
-    } catch (err) {
-        console.error('[RECURRING] Error al eliminar:', err);
-        Swal.fire('Error', 'No se pudo eliminar el gasto recurrente.', 'error');
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const recurringForm = document.getElementById('recurring-form');
-    if (recurringForm) {
-        recurringForm.addEventListener('submit', async (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-
-            const description = document.getElementById('recurringDescription').value;
-            const amount = document.getElementById('recurringAmount').value;
-            const category = document.getElementById('recurringCategory').value;
-            const payer = document.getElementById('recurringPayer').value;
-            const frequency = document.getElementById('recurringFrequency').value;
-            const nextDueDate = document.getElementById('recurringDueDate').value;
-
-            if (!description || !amount || !nextDueDate) {
-                Swal.fire('Atención', 'Completa todos los campos obligatorios.', 'warning');
-                return;
-            }
-
             try {
-                const res = await fetch('/api/recurring', {
+                await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        description,
-                        amount: parseFloat(amount),
-                        payer,
-                        category,
-                        frequency,
-                        next_due_date: nextDueDate
+                        username: document.getElementById('login-username').value,
+                        password: document.getElementById('login-password').value
                     })
                 });
-
-                if (!res.ok) {
-                    const error = await res.json().catch(() => ({}));
-                    throw new Error(error.error || 'Error en el servidor');
-                }
-
-                Swal.fire('¡Listo!', 'Gasto recurrente creado.', 'success');
-                recurringForm.reset();
-                bootstrap.Modal.getInstance(document.getElementById('recurringModal')).hide();
-                await loadRecurring();
+                window.location.reload();
             } catch (err) {
-                console.error('[RECURRING] Error al crear:', err);
-                Swal.fire('Error', err.message || 'No se pudo crear el gasto recurrente.', 'error');
+                document.getElementById('login-error').textContent = err.message;
             }
         });
     }
-});
 
-async function loadVersion() {
-    try {
-        const res = await fetch('/api/version');
-        const data = await res.json();
-        const el = document.getElementById('app-version');
-        if (el) el.textContent = data.version || '—';
-    } catch (err) {
-        console.warn('[VERSION] No se pudo cargar:', err.message);
+    // Google login
+    const googleBtn = document.getElementById('google-login-btn');
+    if (googleBtn) {
+        googleBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/google/init');
+                const data = await res.json();
+                if (data.authUrl) window.location.href = data.authUrl;
+            } catch (e) {
+                document.getElementById('login-error').textContent = e.message;
+            }
+        });
     }
-}
+
+    // Split mode change
+    document.querySelectorAll('input[name="split_mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            currentSplitMode = radio.value;
+            updateSplitDisplay();
+        });
+    });
+
+    // Filter inputs
+    document.getElementById('search-input')?.addEventListener('input', (e) => {
+        historyFilters.search = e.target.value;
+        renderExpenses();
+    });
+    document.getElementById('category-filter')?.addEventListener('change', (e) => {
+        historyFilters.category = e.target.value;
+        renderExpenses();
+    });
+    document.getElementById('payer-filter')?.addEventListener('change', (e) => {
+        historyFilters.payer = e.target.value;
+        renderExpenses();
+    });
+    document.getElementById('month-filter')?.addEventListener('change', (e) => {
+        historyFilters.month = e.target.value;
+        renderExpenses();
+    });
+
+    // Load
+    loadAuth();
+});

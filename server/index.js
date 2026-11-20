@@ -9,7 +9,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const db = require('./database');
-const { authMiddleware, login, logout, getUser, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions } = require('./auth');
+const { authMiddleware, login, logout, getUser, getUserGroups, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions } = require('./auth');
+const groupsRouter = require('./groups');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -41,6 +42,9 @@ app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 // Middleware
 app.use(bodyParser.json({ limit: '100kb' }));
 
+// Grupos API
+app.use('/api/groups', groupsRouter);
+
 // Servir archivos estáticos (login incluido)
 app.use(express.static(path.join(__dirname, '..')));
 
@@ -49,15 +53,15 @@ app.get('/', (req, res) => {
 });
 
 // Auth endpoints (no requieren autenticación)
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    console.log(`[LOGIN] Recibido: user="${username}" pass="${password}"`);
-    console.log(`[LOGIN] AUTH_TIN="${process.env.AUTH_TIN}"`);
+    console.log(`[LOGIN] Recibido: user="${username}" pass="****"`);
+    console.log(`[LOGIN] AUTH_TIN="${process.env.AUTH_TIN ? '***' : undefined}"`);
     if (!username || !password) {
         return res.status(400).json({ error: 'Faltan credenciales' });
     }
 
-    const token = login(username, password);
+    const token = await login(username, password);
     if (!token) {
         console.log(`[LOGIN] FALLO: credenciales inválidas para user="${username}"`);
         return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -257,7 +261,7 @@ app.put('/api/recurring/:id', async (req, res) => {
     }
 });
 
-app.get('/api/auth/check', (req, res) => {
+app.get('/api/auth/check', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -268,14 +272,13 @@ app.get('/api/auth/check', (req, res) => {
             cookies[key.trim()] = rest.join('=').trim();
         });
     }
-    console.log(`[AUTH/CHECK] Cookie header: ${req.headers.cookie}`);
-    console.log(`[AUTH/CHECK] Parsed cookies:`, cookies);
-    console.log(`[AUTH/CHECK] session_token:`, cookies['session_token']);
-    const user = getUser(cookies['session_token']);
+    const user = await getUser(cookies['session_token']);
     if (!user) {
         return res.status(401).json({ error: 'No autenticado' });
     }
-    res.json({ user: user.username, payer: user.payer });
+    const groups = await getUserGroups(user.id);
+    const defaultGroup = groups.length > 0 ? { id: groups[0].id, name: groups[0].name, currency: groups[0].base_currency } : null;
+    res.json({ user: user.username, payer: user.payer, role: user.role, groups, defaultGroup });
 });
 
 // Listado de monedas - público (antes del auth)
@@ -345,6 +348,26 @@ app.delete('/api/currencies/:code', async (req, res) => {
 
 app.get('/api/expenses', async (req, res) => {
     try {
+        const { username, userId } = req.user;
+
+        // Get user's default group (first group)
+        const groupResult = await db.execute(`
+            SELECT g.id, g.base_currency
+            FROM groups g
+            JOIN group_members gm ON g.id = gm.group_id
+            WHERE gm.user_id = ?
+            ORDER BY g.name ASC
+            LIMIT 1
+        `, [userId]);
+
+        if (groupResult.rows.length === 0) {
+            return res.status(404).json({ error: 'No se encontró grupo para el usuario' });
+        }
+
+        const groupId = groupResult.rows[0].id;
+        const groupCurrency = groupResult.rows[0].base_currency || 'UYU';
+
+        // Get currencies
         const currenciesResult = await db.execute('SELECT * FROM currencies ORDER BY is_default DESC, code ASC');
         const currencies = {};
         let baseCurrency = 'UYU';
@@ -352,16 +375,24 @@ app.get('/api/expenses', async (req, res) => {
             currencies[c.code] = c.rate;
             if (c.is_default) baseCurrency = c.code;
         });
-        if (!currencies[baseCurrency]) baseCurrency = 'UYU';
 
-        const result = await db.execute('SELECT * FROM expenses ORDER BY date DESC');
+        // Get expenses from group
+        const result = await db.execute(`
+            SELECT ge.*, u2.username as payer_username
+            FROM group_expenses ge
+            JOIN users u2 ON ge.payer = u2.username
+            WHERE ge.group_id = ?
+            ORDER BY ge.date DESC, ge.created_at DESC
+        `, [groupId]);
         const rows = result.rows;
 
         const expensesWithSplits = await Promise.all(rows.map(async (row) => {
-            const splitsResult = await db.execute('SELECT * FROM expense_splits WHERE expense_id = ?', [row.id]);
+            const splitsResult = await db.execute('SELECT * FROM group_splits WHERE expense_id = ?', [row.id]);
             const splits = splitsResult.rows;
-            const meShare = splits.filter(s => s.user_id === 'me').reduce((sum, s) => sum + s.amount, 0);
-            const partnerShare = splits.filter(s => s.user_id === 'partner').reduce((sum, s) => sum + s.amount, 0);
+
+            // Map user_id back to 'me'/'partner' for frontend compatibility
+            const meShare = splits.filter(s => s.user_id === username).reduce((sum, s) => sum + s.amount, 0);
+            const partnerShare = splits.filter(s => s.user_id !== username).reduce((sum, s) => sum + s.amount, 0);
 
             return {
                 ...row,
@@ -382,7 +413,7 @@ app.get('/api/expenses', async (req, res) => {
             const meShareBase = (expense.meShare / currencyRate);
             const partnerShareBase = (expense.partnerShare / currencyRate);
 
-            if (expense.payer === 'me') {
+            if (expense.payer === username) {
                 totalMe += amountInBase - meShareBase;
             } else {
                 totalPartner += amountInBase - partnerShareBase;
@@ -398,7 +429,9 @@ app.get('/api/expenses', async (req, res) => {
                 totalPartner: ((totalPartner / baseRate)).toFixed(2),
                 balance: balance > 0 ? (balance / 2).toFixed(2) : (Math.abs(balance) / 2).toFixed(2),
                 status: balance > 0 ? "Te deben" : "Le debes",
-                baseCurrency
+                baseCurrency,
+                groupId,
+                groupName: groupCurrency ? 'Casa' : null
             }
         });
     } catch (err) {
@@ -409,13 +442,21 @@ app.get('/api/expenses', async (req, res) => {
 
 app.get('/api/expense/:id', async (req, res) => {
     try {
-        const result = await db.execute('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
+        const { userId } = req.user;
+        const groupId = req.query.groupId;
+
+        const result = await db.execute(`
+            SELECT ge.*, u2.username as payer_username
+            FROM group_expenses ge
+            JOIN users u2 ON ge.payer = u2.username
+            WHERE ge.id = ? AND ge.group_id = ?
+        `, [req.params.id, groupId || '0']);
         if (!result.rows || result.rows.length === 0) {
             return res.status(404).json({ error: 'Gasto no encontrado' });
         }
         const expense = result.rows[0];
 
-        const splitsResult = await db.execute('SELECT * FROM expense_splits WHERE expense_id = ?', [req.params.id]);
+        const splitsResult = await db.execute('SELECT * FROM group_splits WHERE expense_id = ?', [req.params.id]);
         const splits = splitsResult.rows;
 
         res.json({ ...expense, splits });
@@ -426,80 +467,92 @@ app.get('/api/expense/:id', async (req, res) => {
 });
 
 app.post('/api/expense', async (req, res) => {
-    const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
-    const cleanDescription = description ? description.trim() : '';
-    const parsedAmount = parseFloat(amount);
-
-    const validPayers = ['me', 'partner'];
-    const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
-    const validSplitModes = ['equal', 'solo', 'custom'];
-    const validCurrency = currency && ['UYU', 'USD', 'BRL', 'EUR', 'ARS', 'CLP', 'MXN', 'COP', 'PEN'].includes(currency.toUpperCase());
-
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        console.warn(`[VALIDACIÓN] Monto inválido recibido`);
-        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
-    }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: 'Fecha inválida' });
-    }
-    if (!validPayers.includes(payer)) {
-        return res.status(400).json({ error: 'Pagador inválido' });
-    }
-    if (!validCategories.includes(category)) {
-        return res.status(400).json({ error: 'Categoría inválida' });
-    }
-    if (cleanDescription.length > 500) {
-        return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
-    }
-    if (!split_mode || !validSplitModes.includes(split_mode)) {
-        return res.status(400).json({ error: 'Modo de división inválido' });
-    }
-    if (!validCurrency) {
-        return res.status(400).json({ error: 'Moneda inválida (por defecto UYU)' });
-    }
-
-    let splitAmounts = [];
-    if (split_mode === 'equal') {
-        splitAmounts = [{ user_id: 'me', amount: parsedAmount / 2 }, { user_id: 'partner', amount: parsedAmount / 2 }];
-    } else if (split_mode === 'solo') {
-        splitAmounts = [{ user_id: payer, amount: parsedAmount }];
-    } else if (split_mode === 'custom') {
-        if (!Array.isArray(splits) || splits.length === 0) {
-            return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
-        }
-        let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
-        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-            return res.status(400).json({ error: `La suma de los splits ($${totalSplit}) no coincide con el monto ($${parsedAmount})` });
-        }
-        splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
-    }
-
     try {
-        const currencyCode = validCurrency ? currency.toUpperCase() : 'UYU';
+        const { username, userId } = req.user;
+        const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
+        const cleanDescription = description ? description.trim() : '';
+        const parsedAmount = parseFloat(amount);
+
+        // Resolve payer to actual username
+        const payerMap = { 'me': username, 'partner': username === 'tin' ? 'noe' : 'tin' };
+        const resolvedPayer = payerMap[payer] || payer;
+
+        // Get user's default group
+        const groupResult = await db.execute(`
+            SELECT g.id, g.base_currency
+            FROM groups g
+            JOIN group_members gm ON g.id = gm.group_id
+            WHERE gm.user_id = ?
+            ORDER BY g.name ASC
+            LIMIT 1
+        `, [userId]);
+
+        if (groupResult.rows.length === 0) {
+            return res.status(404).json({ error: 'No se encontró grupo para el usuario' });
+        }
+
+        const groupId = groupResult.rows[0].id;
+        const currencyCode = currency && ['UYU','USD','BRL','EUR','ARS','CLP','MXN','COP','PEN'].includes(currency.toUpperCase())
+            ? currency.toUpperCase() : groupResult.rows[0].base_currency || 'UYU';
+
+        // Validate
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: 'El monto debe ser un número positivo' });
+        }
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({ error: 'Fecha inválida' });
+        }
+        if (!['Alimentación','Transporte','Ocio','Servicios','Otros'].includes(category)) {
+            return res.status(400).json({ error: 'Categoría inválida' });
+        }
+        if (cleanDescription.length > 500) {
+            return res.status(400).json({ error: 'Descripción demasiado larga' });
+        }
+        if (!['equal','solo','custom'].includes(split_mode)) {
+            return res.status(400).json({ error: 'Modo de división inválido' });
+        }
+
+        let splitAmounts = [];
+        if (split_mode === 'equal') {
+            splitAmounts = [{ user_id: username, amount: parsedAmount / 2 }];
+        } else if (split_mode === 'solo') {
+            splitAmounts = [{ user_id: resolvedPayer, amount: parsedAmount }];
+        } else if (split_mode === 'custom') {
+            if (!Array.isArray(splits) || splits.length === 0) {
+                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+            }
+            let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+            if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+                return res.status(400).json({ error: `La suma de los splits no coincide con el monto` });
+            }
+            splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
+        }
+
         const result = await db.execute({
-            sql: 'INSERT INTO expenses (date, description, amount, payer, category, currency) VALUES (?, ?, ?, ?, ?, ?)',
-            args: [date, cleanDescription, parsedAmount, payer, category, currencyCode],
+            sql: 'INSERT INTO group_expenses (group_id, date, description, amount, payer, category, currency, split_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            args: [groupId, date, cleanDescription, parsedAmount, resolvedPayer, category, currencyCode, split_mode],
         });
         const expenseId = result.lastInsertRowid;
 
         for (const split of splitAmounts) {
             await db.execute({
-                sql: 'INSERT INTO expense_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
                 args: [Number(expenseId), split.user_id, split.amount],
             });
         }
 
-        console.log(`[ÉXITO] Gasto registrado: ${cleanDescription} - $${parsedAmount} (${split_mode})`);
+        console.log(`[ÉXITO] Gasto registrado en grupo ${groupId}: ${cleanDescription} - $${parsedAmount}`);
         res.json({ id: Number(expenseId), message: 'Gasto registrado con éxito' });
     } catch (err) {
-        console.error(`[ERROR_DB] Fallo al insertar en la base de datos: ${err}`);
+        console.error(`[ERROR_DB] Fallo al insertar gasto: ${err}`);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
 
 app.delete('/api/expense/:id', async (req, res) => {
     try {
-        const result = await db.execute('DELETE FROM expenses WHERE id = ?', [req.params.id]);
+        const { userId } = req.user;
+        const result = await db.execute('DELETE FROM group_expenses WHERE id = ? AND group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)', [req.params.id, userId]);
         if (result.changes === 0) {
             return res.status(404).json({ error: 'Gasto no encontrado' });
         }
@@ -512,72 +565,49 @@ app.delete('/api/expense/:id', async (req, res) => {
 });
 
 app.put('/api/expense/:id', async (req, res) => {
-    const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
-    const cleanDescription = description ? description.trim() : '';
-    const parsedAmount = parseFloat(amount);
-
-    const validPayers = ['me', 'partner'];
-    const validCategories = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
-    const validSplitModes = ['equal', 'solo', 'custom'];
-    const validCurrency = currency && ['UYU', 'USD', 'BRL', 'EUR', 'ARS', 'CLP', 'MXN', 'COP', 'PEN'].includes(currency.toUpperCase());
-
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
-    }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ error: 'Fecha inválida' });
-    }
-    if (!validPayers.includes(payer)) {
-        return res.status(400).json({ error: 'Pagador inválido' });
-    }
-    if (!validCategories.includes(category)) {
-        return res.status(400).json({ error: 'Categoría inválida' });
-    }
-    if (cleanDescription.length > 500) {
-        return res.status(400).json({ error: 'Descripción demasiado larga (máximo 500 caracteres)' });
-    }
-    if (!split_mode || !validSplitModes.includes(split_mode)) {
-        return res.status(400).json({ error: 'Modo de división inválido' });
-    }
-
-    let splitAmounts = [];
-    if (split_mode === 'equal') {
-        splitAmounts = [{ user_id: 'me', amount: parsedAmount / 2 }, { user_id: 'partner', amount: parsedAmount / 2 }];
-    } else if (split_mode === 'solo') {
-        splitAmounts = [{ user_id: payer, amount: parsedAmount }];
-    } else if (split_mode === 'custom') {
-        if (!Array.isArray(splits) || splits.length === 0) {
-            return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
-        }
-        let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
-        if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-            return res.status(400).json({ error: `La suma de los splits ($${totalSplit}) no coincide con el monto ($${parsedAmount})` });
-        }
-        splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
-    }
-
     try {
-        const existing = await db.execute('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
-        if (existing.rows.length === 0) {
+        const { username, userId } = req.user;
+        const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
+        const cleanDescription = description ? description.trim() : '';
+        const parsedAmount = parseFloat(amount);
+
+        const payerMap = { 'me': username, 'partner': username === 'tin' ? 'noe' : 'tin' };
+        const resolvedPayer = payerMap[payer] || payer;
+
+        const result = await db.execute({
+            sql: 'UPDATE group_expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ?, split_mode = ? WHERE id = ? AND group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)',
+            args: [date, cleanDescription, parsedAmount, resolvedPayer, category, split_mode, req.params.id, userId]
+        });
+
+        if (result.changes === 0) {
             return res.status(404).json({ error: 'Gasto no encontrado' });
         }
 
-        const currencyCode = validCurrency ? currency.toUpperCase() : 'UYU';
-        await db.execute(
-            'UPDATE expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ?, currency = ? WHERE id = ?',
-            [date, cleanDescription, parsedAmount, payer, category, currencyCode, req.params.id]
-        );
+        await db.execute('DELETE FROM group_splits WHERE expense_id = ?', [req.params.id]);
 
-        await db.execute('DELETE FROM expense_splits WHERE expense_id = ?', [req.params.id]);
+        let splitAmounts = [];
+        if (split_mode === 'equal') {
+            splitAmounts = [{ user_id: username, amount: parsedAmount / 2 }];
+        } else if (split_mode === 'solo') {
+            splitAmounts = [{ user_id: resolvedPayer, amount: parsedAmount }];
+        } else if (split_mode === 'custom') {
+            if (!Array.isArray(splits) || splits.length === 0) {
+                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+            }
+            let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+            if (Math.abs(totalSplit - parsedAmount) > 0.01) {
+                return res.status(400).json({ error: 'La suma de los splits no coincide con el monto' });
+            }
+            splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
+        }
 
         for (const split of splitAmounts) {
             await db.execute({
-                sql: 'INSERT INTO expense_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
                 args: [req.params.id, split.user_id, split.amount],
             });
         }
 
-        console.log(`[ÉXITO] Gasto actualizado: ${req.params.id} - ${cleanDescription} (${split_mode})`);
         res.json({ message: 'Gasto actualizado con éxito' });
     } catch (err) {
         console.error(`[ERROR_DB] Fallo al actualizar gasto: ${err}`);
