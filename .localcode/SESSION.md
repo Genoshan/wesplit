@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-21
-- **Rama**: `ui/theme-button` desde `main` (`76bd19c`). PRs #19 y #20 mergeados.
+- **Rama**: `ui/theme-button` desde `main` (`76bd19c`). PRs #19 y #20 mergeados; PR #21 abierto.
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -55,7 +55,7 @@
 ## Próximos pasos
 
 1. PRs #19 y #20 ya mergeados en `main`.
-2. Mergear el PR de `ui/theme-button` y confirmar que el deploy sirve el botón ícono.
+2. Mergear el PR [#21](https://github.com/Genoshan/wesplit/pull/21) y confirmar que el deploy sirve el botón ícono y el tema claro blanco.
 
 ## Restricciones vigentes
 

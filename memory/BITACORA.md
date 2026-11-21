@@ -364,4 +364,4 @@ Cada entrada debe seguir este formato:
 - Cuenta temporal eliminada y pestañas cerradas.
 
 ### Estado final
-- Incluido en la rama `ui/theme-button` junto al botón ícono; pendiente de PR y deploy.
+- PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto (`ui/theme-button` → `main`) con el botón ícono y el rediseño claro; pendiente de merge y deploy.
