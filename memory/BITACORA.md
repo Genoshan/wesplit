@@ -377,3 +377,16 @@ Cada entrada debe seguir este formato:
 ### Fix de contraste: placeholder ilegible en oscuro
 - El placeholder de los inputs usaba `--bs-secondary-color` de Bootstrap (`rgba(33,37,41,.75)`, gris de fondo claro) y quedaba casi invisible sobre el fondo oscuro (ej. “Buscar…” con foco).
 - Se fijó `--bs-secondary-color` por tema: claro `rgba(33,37,41,.75)`, oscuro `rgba(232,233,234,.75)`. Verificado en ambos.
+
+### Fix: tabla de pagos con letras negras en oscuro
+- Bootstrap 5.3 aplica `--bs-emphasis-color` (default `#000`) y `--bs-secondary-bg` (gris claro) a `table` / estados. Nuestro tema oscuro no las invertía: `th` quedaba negro sobre fondo oscuro.
+- Se completaron las variables `-bs-*` del bloque oscuro (body/color/border/primary/success/danger/secondary/emphasis/tertiary/highlight y sus `-rgb`). Verificado: `th color rgb(232,233,234)`, `th bg rgb(26,29,33)`, `--bs-secondary-bg #2b3038`.
+
+## [2026-11-21] Revisión QA y prompt reutilizable
+
+- El usuario pidió un prompt de QA para validar casos de uso completos y una revisión con las herramientas disponibles (MCP browser sí está disponible).
+- Se creó `docs/QA_TESTING_PROMPT.md`: 8 bloques (auth, grupos, miembros, gastos, pagos/balances, filtros/CSV/stats, UI/tema, seguridad), ~60 casos con ID, pasos y esperado, reglas de no-secretos y limpieza, y formato de reporte.
+- Se creó `docs/QA_REVIEW_2026-11-21.md` con los resultados: Jest 9/9; flujos E2E verificados en browser aislado (registro, login, crear grupo, gasto, filtros, editar/eliminar gasto, invitar/aceptar, pago, balances, stats, toggle de tema); fix de tabla oscuro medido.
+- Hallazgos: GRP-004 selección de grupo no persiste tras reload (Medio); fechas de gasto sin validar en servidor; inyección de fórmulas CSV; LIKE sin escapar; moneda de pago tomada del body.
+- Nota operativa: `node_modules` estaba incompleto y `npm ci` falló primero porque el server tenía el binario de libsql abierto; se detuvo el server, se reinstaló desde lockfile (sin cambios de versión) y se volvió a levantar.
+- Limpieza de cuentas `qaflow2026` / `qamember2026` quedó pendiente por `429` del limiter de auth (10/15 min).
