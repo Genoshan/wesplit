@@ -395,4 +395,5 @@ Cada entrada debe seguir este formato:
 - QA-001: persistencia del grupo activo vía `localStorage['seg_group']` + helper `rememberGroup()` en `app.js` (carga, cambio, creación/borrado de grupo, aceptar invitación, logout). Verificado en browser: seleccionar grupo 58, recargar, sigue seleccionado.
 - QA-002: `isValidDateString()` en `server/groups.js` (formato y fecha calendario real `YYYY-MM-DD`), aplicado al alta y edición de gastos; pagos reutilizan el mismo helper. Verificado: fechas inválidas → 400, válida → 200.
 - QA-003: `esc()` del export CSV prefija con `'` los valores que empiezan con `=`, `+`, `-` o `@` para evitar inyección de fórmulas. Verificado en CSV generado.
+- QA-004: `/api/users/search` (`server/index.js:480-493`) escapa `\`, `%` y `_` en el término y usa `LIKE ? ESCAPE '\'`; los comodines del usuario ahora son texto literal. Verificado: `%`, `_` y `\` → 0 resultados, `qa` → coincidencia por prefijo.
 - Jest 9/9 después de los cambios; cuentas de prueba eliminadas (200) y trabajo diferido de limpieza cancelado.
