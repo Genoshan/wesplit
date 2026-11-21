@@ -8,7 +8,7 @@ Aplicación web de gastos compartidos inspirada en Splitwise, para uso doméstic
 
 ## Alcance actual
 
-- **Usuarios**: registro con username/email/password (mínimo 12 caracteres, `bcryptjs` con rehash legacy) y login con Google OAuth (cualquier email verificado; la allowlist está desactivada en `.env`).
+- **Usuarios**: registro con username/email/password (mínimo 8 caracteres con letra, número y símbolo; `bcryptjs` con rehash legacy) y login con Google OAuth (cualquier email verificado; la allowlist está desactivada en `.env`). El login manual acepta username o email.
 - **Grupos**: cada registro crea automáticamente un grupo `Mis gastos` propio, con el creador como admin. Un usuario puede pertenecer a varios grupos y cambiar entre ellos desde el selector del header; el grupo elegido se recuerda al recargar.
 - **Invitaciones**: por username exacto, sin link. El invitado debe estar registrado antes y **debe aceptar** la invitación desde la pestaña Miembros; mientras tanto queda como `pending` y no ve los datos del grupo.
 - **Roles**: dos niveles independientes — `users.global_role` (admin/member global) y `group_members.role` (admin/member dentro de cada grupo).

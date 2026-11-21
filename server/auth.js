@@ -471,12 +471,6 @@ async function handleGoogleCallback(code, state, cookieToken) {
         }
         const googleName = userInfo.name || '';
 
-        // Log temporal: solo nombres de campos y tipos, nunca valores ni tokens.
-        const flagKeys = ['email_verified', 'verified_email'];
-        console.log('[GOOGLE DEBUG] tokeninfo:', flagKeys.map(k => `${k}=${k in userInfoResult}`).join(' '));
-        console.log('[GOOGLE DEBUG] userinfo:', flagKeys.map(k => `${k}=${k in userInfo}`).join(' '));
-        console.log('[GOOGLE DEBUG] tipos:', typeof userInfoResult.email_verified, typeof userInfo.email_verified);
-
         const emailVerified = googleVerifiedFlag(userInfoResult.email_verified)
             || googleVerifiedFlag(userInfoResult.verified_email)
             || googleVerifiedFlag(userInfo.email_verified)

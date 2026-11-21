@@ -1,6 +1,6 @@
 # Backlog de Mejoras - wesplit
 
-Estado al 2026-11-20. Los ítems resueltos se conservan marcados para no reabrirlos por accidente.
+Estado al 2026-11-21. Los ítems resueltos se conservan marcados para no reabrirlos por accidente.
 
 ## ✅ Resueltos
 
@@ -17,6 +17,12 @@ Estado al 2026-11-20. Los ítems resueltos se conservan marcados para no reabrir
 - [x] Historial con filtros, resumen de deudas y estados vacíos.
 - [x] Pagos entre miembros del grupo (settle up) con descuento en balances e historial.
 - [x] Filtro por rango de fechas y exportación CSV del grupo.
+- [x] Persistencia del grupo seleccionado (`localStorage['seg_group']`) y correcciones QA-001 a QA-008.
+- [x] Paleta verde Splitwise/navy en tema claro, con tema oscuro intacto; botón de tema con ícono 🌙/☀️.
+- [x] Favicon multi-tamaño (ICO 16/32/48/64) servido desde `/favicon.ico`.
+- [x] 0 vulnerabilidades de producción (`npm audit --omit=dev`), sin cambiar versiones de dependencias.
+- [x] Marcador de versión en `/api/version`, meta tag y consola (nunca en la UI).
+- [x] Google OAuth operativo en producción: redirect URI, `TRUST_PROXY=1` y verificación de email vía `userinfo` (OIDC).
 
 ## 🟡 Pendiente / diferido
 

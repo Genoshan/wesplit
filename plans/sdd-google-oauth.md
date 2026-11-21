@@ -171,7 +171,7 @@ Semantics de `GOOGLE_AUTHORIZED_EMAILS`:
 5. Crear **Credentials** -> OAuth Client ID
    - Type: `Web application`
    - Authorized redirect URIs: `http://localhost:4000/api/google/callback` (dev)
-   - Para prod: `https://wesplit.genoshan.com/api/google/callback`
+   - Para prod: `https://wesplit-k5rc.onrender.com/api/google/callback`
 6. Copiar `Client ID` y `Client Secret` al `.env`
 
 ## 7. Estructura de Archivos Modificados

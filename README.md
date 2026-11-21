@@ -2,7 +2,7 @@
 
 Gastos compartidos con grupos dinámicos: N miembros por grupo, moneda única, reparto exacto en centavos, balances por miembro, invitaciones con aceptación y baja lógica de participantes.
 
-> Estado al 2026-11-21: PRs [#19](https://github.com/Genoshan/wesplit/pull/19) y [#20](https://github.com/Genoshan/wesplit/pull/20) mergeados en `main`. PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto (`ui/theme-button` → `main`): botón de tema ícono 🌙/☀️ fuera del dropdown y rediseño del tema claro con paleta Bootstrap 5 (fondo blanco, azul `#0d6efd`, verde `#198754`). Sin `push` ni PR automatizados sin autorización explícita.
+> Estado al 2026-11-21: PRs #19 a #27 mergeados en `main`, **sin PRs abiertos**. Desplegado en `https://wesplit-k5rc.onrender.com` (`version 1.0.0`, `preview: false`, 0 vulnerabilidades en producción, 18/18 tests). Tema claro con paleta verde Splitwise/navy (`#27c95c`, `#1e5e4e`, `#268874`); tema oscuro intacto. Favicon y login con Google operativos. Sin `push` ni PR automatizados sin autorización explícita.
 
 ## Ejecutar
 
