@@ -14,6 +14,7 @@ let currentGroupId = null;
 let currentGroupName = null;
 let currentGroupCurrency = 'UYU';
 let currentGroupMembers = [];
+let selectorGroups = [];
 let currentSplitMode = 'equal';
 let editingExpenseId = null;
 let editingSplitMode = 'equal';
@@ -211,7 +212,7 @@ async function loadAuth() {
         document.getElementById('login-screen').hidden = true;
         document.getElementById('app-screen').hidden = false;
         renderHeader();
-        renderGroupSelector();
+        renderGroupSelector(data.groups);
         loadExpenses();
         renderInvitations();
     } catch (err) {
@@ -243,44 +244,80 @@ function renderHeader() {
     }
 }
 
-function renderGroupSelector() {
-    fetch('/api/auth/check')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.groups || data.groups.length === 0) return;
-            const selector = document.getElementById('group-selector');
-            if (!selector) return;
-            const current = data.groups.find(g => g.id == currentGroupId) || data.groups[0];
-            currentGroupId = current.id;
-            currentGroupName = current.name;
-            currentGroupCurrency = current.base_currency || current.currency || 'UYU';
-            currentGroupMembers = [];
-            selector.innerHTML = data.groups.map(g =>
-                `<option value="${escapeHtml(g.id)}" ${g.id == currentGroupId ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
-            ).join('');
-            const groupBadge = document.getElementById('current-group-name');
-            if (groupBadge) groupBadge.textContent = currentGroupName;
-            const handleGroupChange = () => {
-                currentGroupId = parseInt(selector.value);
+// "Vos" primero para reconocer el grupo propio de un vistazo. El resto de
+// miembros activos viene en /api/auth/check (member_names), sin pedir un
+// /api/groups/:id por cada grupo.
+function groupMemberLine(group) {
+    const names = String(group?.member_names || '')
+        .split(',')
+        .map(n => n.trim())
+        .filter(Boolean);
+    const me = currentUser?.username?.toLowerCase();
+    if (me) {
+        const own = names.findIndex(n => n.toLowerCase() === me);
+        if (own >= 0) {
+            names.splice(own, 1);
+            names.unshift('Vos');
+        }
+    }
+    if (names.length === 0) return 'Sin miembros activos';
+    return names.join(', ');
+}
+
+function renderGroupSelector(groups) {
+    const render = data => {
+        if (!data.groups || data.groups.length === 0) return;
+        const menu = document.getElementById('group-selector-menu');
+        const toggleName = document.getElementById('group-selector-name');
+        if (!menu || !toggleName) return;
+        const current = data.groups.find(g => g.id == currentGroupId) || data.groups[0];
+        currentGroupId = current.id;
+        currentGroupName = current.name;
+        currentGroupCurrency = current.base_currency || current.currency || 'UYU';
+        currentGroupMembers = [];
+        selectorGroups = data.groups;
+
+        // Si dos grupos se llaman igual, agregamos el id para que no haya duda.
+        const counts = {};
+        data.groups.forEach(g => {
+            const key = String(g.name).toLowerCase();
+            counts[key] = (counts[key] || 0) + 1;
+        });
+        menu.innerHTML = data.groups.map(g => {
+            const repeated = counts[String(g.name).toLowerCase()] > 1;
+            const isCurrent = g.id == currentGroupId;
+            const label = `${isCurrent ? '✓ ' : ''}${escapeHtml(g.name)}${repeated ? ` <span class="group-option-id">#${escapeHtml(g.id)}</span>` : ''}`;
+            return `<li>
+                <button type="button" class="dropdown-item group-option${isCurrent ? ' is-current' : ''}" data-group-id="${escapeHtml(g.id)}" ${isCurrent ? 'aria-current="true"' : ''}>
+                    <span class="group-option-name d-block">${label}</span>
+                    <span class="group-option-members d-block small text-secondary">${escapeHtml(groupMemberLine(g))}</span>
+                </button>
+            </li>`;
+        }).join('');
+        toggleName.textContent = currentGroupName;
+        const groupBadge = document.getElementById('current-group-name');
+        if (groupBadge) groupBadge.textContent = currentGroupName;
+
+        if (!menu._groupClickHandler) {
+            menu._groupClickHandler = event => {
+                const option = event.target.closest('[data-group-id]');
+                if (!option) return;
+                const group = selectorGroups.find(g => g.id === Number(option.dataset.groupId));
+                if (!group) return;
+                currentGroupId = group.id;
                 rememberGroup(currentGroupId);
-                currentGroupMembers = [];
-                const selected = data.groups.find(g => g.id == currentGroupId);
-                currentGroupName = selected ? selected.name : null;
-                currentGroupCurrency = selected?.base_currency || selected?.currency || 'UYU';
-                const groupBadge = document.getElementById('current-group-name');
-                if (groupBadge) groupBadge.textContent = currentGroupName || '';
+                render({ groups: selectorGroups });
                 loadExpenses();
-                updateDeleteButton(data.groups);
+                updateDeleteButton(selectorGroups);
             };
-            if (selector._groupChangeHandler) {
-                selector.removeEventListener('change', selector._groupChangeHandler);
-            }
-            selector._groupChangeHandler = handleGroupChange;
-            selector.addEventListener('change', handleGroupChange);
-            // Show delete button only if admin of current group
-            updateDeleteButton(data.groups);
-        })
-        .catch(e => console.error('[APP] Group selector error:', e));
+            menu.addEventListener('click', menu._groupClickHandler);
+        }
+        // Show delete button only if admin of current group
+        updateDeleteButton(data.groups);
+    };
+
+    if (groups) render({ groups });
+    else fetch('/api/auth/check').then(r => r.json()).then(render).catch(e => console.error('[APP] Group selector error:', e));
 }
 
 function updateDeleteButton(groups) {
@@ -323,9 +360,7 @@ async function confirmCreateGroup() {
 }
 
 function openDeleteGroupModal() {
-    const selector = document.getElementById('group-selector');
-    const selectedOption = selector ? selector.options[selector.selectedIndex] : null;
-    const name = selectedOption ? selectedOption.text : (currentGroupName || 'este grupo');
+    const name = currentGroupName || 'este grupo';
     document.getElementById('delete-group-name').textContent = name;
     const modal = new bootstrap.Modal(document.getElementById('deleteGroupModal'));
     modal.show();

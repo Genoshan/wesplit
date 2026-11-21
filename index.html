@@ -80,7 +80,12 @@
                 <span id="current-group-name" class="current-group-badge"></span>
             </div>
             <div class="header-actions">
-                <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
+                <div class="dropdown group-selector-dropdown">
+                    <button id="group-selector" class="btn btn-sm btn-outline-secondary dropdown-toggle group-selector-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Seleccionar grupo">
+                        <span id="group-selector-name">Grupos</span>
+                    </button>
+                    <ul id="group-selector-menu" class="dropdown-menu group-selector-menu" aria-labelledby="group-selector"></ul>
+                </div>
                 <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
                 <button id="toggle-theme-btn" class="btn btn-sm btn-outline-secondary theme-toggle-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro">🌙</button>
                 <button id="invitations-btn" class="btn btn-sm btn-outline-warning" hidden>Invitaciones <span id="invitations-count" class="badge bg-warning text-dark">0</span></button>
