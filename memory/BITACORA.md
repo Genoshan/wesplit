@@ -328,5 +328,80 @@ Cada entrada debe seguir este formato:
 - En navegador: claro `rgb(247,248,250)` ↔ oscuro `rgb(26,29,33)`, etiqueta y título del botón cambian correctamente.
 
 ### Estado final
-- Rama `fix/theme-toggle` creada desde `main` (`a43c216`), lista para PR.
-- Si el usuario sigue viendo los temas viejos, es el deploy/cache: debe refrescarse después de mergear este fix.
+- PR #20 mergeado: https://github.com/Genoshan/wesplit/pull/20 — merge commit `76bd19c`.
+- El usuario reportó que en el deploy seguía sin cambiar el ícono: síntoma del código previo a #20, así que el deploy aún no había tomado el fix.
+
+## [2026-11-21] Botón de tema como ícono, fuera del dropdown
+
+### Contexto
+- El usuario pidió que el control sea solo 🌙 en claro / ☀️ en oscuro, y que esté en la barra de acciones al lado de `+ Grupo`, no dentro del menú de usuario.
+
+### Cambios realizados
+- `index.html`: `toggle-theme-btn` movido fuera del dropdown, después de `new-group-btn`; eliminada la entrada del menú.
+- `app.js`: `updateThemeToggle()` deja solo el emoji y actualiza `title`/`aria-label`.
+- `style.css`: `.theme-toggle-btn` con `min-width` para evitar saltos de layout.
+
+### Verificación
+- `node --check app.js` limpio; IDs únicos en `index.html`.
+- En navegador: botón al lado de `+ Grupo`, fuera del dropdown; clic cambia 🌙 → ☀️, fondo `rgb(247,248,250)` ↔ `rgb(26,29,33)` y vuelve a 🌙. Cuenta de prueba eliminada.
+
+### Estado final
+- Rama `ui/theme-button` creada desde `main` (`76bd19c`), lista para PR. Requiere que el deploy se reconstruya para verse en producción.
+
+## [2026-11-21] Rediseño del tema claro (paleta Bootstrap 5)
+
+### Contexto
+- El usuario pidió rediseñar por completo el modo claro hasta que se viera como un template Bootstrap recién bajado: fondo blanco, botones azules, verde, etc. El modo oscuro debía quedar intacto.
+
+### Cambios realizados
+- `style.css`: bloque claro pasa a `#ffffff` fondo, `#212529` texto, `#dee2e6` bordes, `#0d6efd` primario, `#198754` éxito, `#dc3545` peligro, `#f8f9fa` paneles suaves y `-rgb` variants acordes.
+- `html` hereda `background-color: var(--bs-body-bg)` para evitar blanco del navegador en overscroll.
+- Regla acotada a `[data-bs-theme="splitwise"]` para que `.btn-success.btn-action` conserve el verde Bootstrap (el oscuro sigue con naranja vía `--accent-color`).
+
+### Verificación
+- Estilos computados con transiciones asentadas: claro = body `rgb(255,255,255)`, cards `rgb(255,255,255)` con borde `rgb(222,226,230)`, primario `rgb(13,110,253)`, pestaña activa azul; pago verde `rgb(25,135,84)`.
+- Oscuro sin cambios: body `rgb(26,29,33)`, cards `rgb(36,40,48)`, acento/pestaña `rgb(255,101,47)`, bordes `rgb(45,49,57)`.
+- Cuenta temporal eliminada y pestañas cerradas.
+
+### Estado final
+- PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto (`ui/theme-button` → `main`) con el botón ícono y el rediseño claro; pendiente de merge y deploy.
+
+### Seguimiento: fondo claro se veía oscuro en el navegador del usuario
+- Capturas mostraron acentos azules (CSS nuevo aplicado) pero fondo/cards oscuros: firma de auto-dark del navegador, no del CSS.
+- **Confirmado**: al abrir Dribbble en el navegador del usuario, el DOM trae `data-darkreader-inline-bgcolor` → tiene la extensión **Dark Reader** activa. Esa extensión oscurece el tema claro.
+- Se agregó `color-scheme: only light` al bloque claro y `only dark` al oscuro.
+- Se agregó `<meta name="darkreader-lock">` en `index.html` para que Dark Reader no procese la app (la app ya tiene su propio toggle claro/oscuro).
+- Con el fix confirmado (body `rgb(255,255,255)` y `darkreader:false` en el navegador del usuario), se exploró Dribbble (`/search/splitwise`), se midió luminosidad de 21 diseños y se eligió la dirección **C — Dashboard SaaS** de Apoorv Arora.
+- Se agregó un bloque acotado a `[data-bs-theme="splitwise"]` con: cards radio 14px + sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, montos con letter-spacing. Oscuro verificado intacto (card 8px, sombra y fondos originales).
+
+### Fix de contraste: placeholder ilegible en oscuro
+- El placeholder de los inputs usaba `--bs-secondary-color` de Bootstrap (`rgba(33,37,41,.75)`, gris de fondo claro) y quedaba casi invisible sobre el fondo oscuro (ej. “Buscar…” con foco).
+- Se fijó `--bs-secondary-color` por tema: claro `rgba(33,37,41,.75)`, oscuro `rgba(232,233,234,.75)`. Verificado en ambos.
+
+### Fix: tabla de pagos con letras negras en oscuro
+- Bootstrap 5.3 aplica `--bs-emphasis-color` (default `#000`) y `--bs-secondary-bg` (gris claro) a `table` / estados. Nuestro tema oscuro no las invertía: `th` quedaba negro sobre fondo oscuro.
+- Se completaron las variables `-bs-*` del bloque oscuro (body/color/border/primary/success/danger/secondary/emphasis/tertiary/highlight y sus `-rgb`). Verificado: `th color rgb(232,233,234)`, `th bg rgb(26,29,33)`, `--bs-secondary-bg #2b3038`.
+
+## [2026-11-21] Revisión QA y prompt reutilizable
+
+- El usuario pidió un prompt de QA para validar casos de uso completos y una revisión con las herramientas disponibles (MCP browser sí está disponible).
+- Se creó `docs/QA_TESTING_PROMPT.md`: 8 bloques (auth, grupos, miembros, gastos, pagos/balances, filtros/CSV/stats, UI/tema, seguridad), ~60 casos con ID, pasos y esperado, reglas de no-secretos y limpieza, y formato de reporte.
+- Se creó `docs/QA_REVIEW_2026-11-21.md` con los resultados: Jest 9/9; flujos E2E verificados en browser aislado (registro, login, crear grupo, gasto, filtros, editar/eliminar gasto, invitar/aceptar, pago, balances, stats, toggle de tema); fix de tabla oscuro medido.
+- Hallazgos: GRP-004 selección de grupo no persiste tras reload (Medio); fechas de gasto sin validar en servidor; inyección de fórmulas CSV; LIKE sin escapar; moneda de pago tomada del body.
+- Nota operativa: `node_modules` estaba incompleto y `npm ci` falló primero porque el server tenía el binario de libsql abierto; se detuvo el server, se reinstaló desde lockfile (sin cambios de versión) y se volvió a levantar.
+- Limpieza de cuentas `qaflow2026` / `qamember2026` quedó pendiente por `429` del limiter de auth (10/15 min).
+
+### Correcciones de QA aplicadas
+- QA-001: persistencia del grupo activo vía `localStorage['seg_group']` + helper `rememberGroup()` en `app.js` (carga, cambio, creación/borrado de grupo, aceptar invitación, logout). Verificado en browser: seleccionar grupo 58, recargar, sigue seleccionado.
+- QA-002: `isValidDateString()` en `server/groups.js` (formato y fecha calendario real `YYYY-MM-DD`), aplicado al alta y edición de gastos; pagos reutilizan el mismo helper. Verificado: fechas inválidas → 400, válida → 200.
+- QA-003: `esc()` del export CSV prefija con `'` los valores que empiezan con `=`, `+`, `-` o `@` para evitar inyección de fórmulas. Verificado en CSV generado.
+- QA-004: `/api/users/search` (`server/index.js:480-493`) escapa `\`, `%` y `_` en el término y usa `LIKE ? ESCAPE '\'`; los comodines del usuario ahora son texto literal. Verificado: `%`, `_` y `\` → 0 resultados, `qa` → coincidencia por prefijo.
+- Jest 9/9 después de los cambios; cuentas de prueba eliminadas (200) y trabajo diferido de limpieza cancelado.
+
+### Segunda tanda de QA (orden aceptado por el usuario)
+- QA-005: `POST /:id/payments` ya no lee `currency` del body; usa `base_currency` del grupo (igual que gastos). Cubierto por test.
+- QA-006: `#no-groups-alert` en `index.html` + lógica en `loadAuth()` que oculta tabs y contenido cuando no hay grupos. Verificado en browser con cuenta descartable: alert visible, tabs ocultos. La primera verificación falló por `app.js` cacheado; con cache-bust funcionó.
+- QA-007: texto aclaratorio en el modal de edición: los miembros inactivos se muestran para conservar el historial (no se ocultan).
+- QA-008: `docs/flow_diagram.md` y `context/project.md` actualizados a "Mis gastos", invitaciones con aceptación, fecha validada y moneda única también en pagos.
+- Tests: nuevo `server/tests/expense.int.test.js` con 9 casos (centavos equal, fechas, moneda, custom 1-centavo, PUT, DELETE, 403, 401, pago con moneda forzada). Total **18/18**.
+- Limpieza: `qanogroups2026` y `qanogroups2` eliminadas (200) tras reiniciar el server para resetear el limiter de auth.

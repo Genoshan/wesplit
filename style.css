@@ -1,33 +1,65 @@
-/* Splitwise (default) */
+/* Splitwise light — paleta Bootstrap 5 estándar (fondo blanco) */
 [data-bs-theme="splitwise"],
 :root {
-    --bs-body-bg: #f7f8fa;
-    --bs-body-color: #2d3436;
-    --bs-border-color: #e0e4e8;
+    /* Evita que el auto-dark del navegador oscurezca el tema claro. */
+    color-scheme: only light;
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #212529;
+    --bs-border-color: #dee2e6;
     --border-color: var(--bs-border-color);
-    --bs-primary: #ff652f;
-    --bs-success: #5bc5a7;
-    
+    --bs-primary: #0d6efd;
+    --bs-primary-rgb: 13, 110, 253;
+    --bs-success: #198754;
+    --bs-success-rgb: 25, 135, 84;
+    --bs-danger: #dc3545;
+    --bs-danger-rgb: 220, 53, 69;
+    --bs-secondary: #6c757d;
+    --bs-secondary-rgb: 108, 117, 125;
+    --bs-secondary-color: rgba(33, 37, 41, 0.75);
+
     --card-bg: #ffffff;
-    --text-primary: #2d3436;
-    --text-secondary: #636e72;
-    --accent-color: #ff652f;
-    --accent-strong: #e85a2a;
-    --soft-panel: #f0f2f5;
-    --success-color: #5bc5a7;
-    --danger-color: #ff652f;
-    --owed-color: #5bc5a7;
-    --owe-color: #ff652f;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --accent-color: #0d6efd;
+    --accent-strong: #0b5ed7;
+    --soft-panel: #f8f9fa;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --owed-color: #198754;
+    --owe-color: #dc3545;
 }
 
 /* Splitwise Dark */
 [data-bs-theme="splitwise-dark"] {
+    color-scheme: only dark;
     --bs-body-bg: #1a1d21;
+    --bs-body-bg-rgb: 26, 29, 33;
     --bs-body-color: #e8e9ea;
+    --bs-body-color-rgb: 232, 233, 234;
     --bs-border-color: #2d3139;
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.15);
     --border-color: var(--bs-border-color);
     --bs-primary: #ff652f;
+    --bs-primary-rgb: 255, 101, 47;
     --bs-success: #5bc5a7;
+    --bs-success-rgb: 91, 197, 167;
+    --bs-danger: #ff652f;
+    --bs-danger-rgb: 255, 101, 47;
+    --bs-secondary: #9aa0a6;
+    --bs-secondary-rgb: 154, 160, 166;
+    --bs-emphasis-color: #e8e9ea;
+    --bs-emphasis-color-rgb: 232, 233, 234;
+    --bs-secondary-color: rgba(232, 233, 234, 0.75);
+    --bs-secondary-color-rgb: 232, 233, 234;
+    --bs-secondary-bg: #2b3038;
+    --bs-secondary-bg-rgb: 43, 48, 56;
+    --bs-tertiary-color: rgba(232, 233, 234, 0.5);
+    --bs-tertiary-color-rgb: 232, 233, 234;
+    --bs-tertiary-bg: #1f2328;
+    --bs-tertiary-bg-rgb: 31, 35, 40;
+    --bs-heading-color: inherit;
+    --bs-highlight-color: #e8e9ea;
+    --bs-highlight-bg: #664d03;
     
     --card-bg: #242830;
     --text-primary: #e8e9ea;
@@ -75,6 +107,7 @@ body {
 
 html {
     -webkit-overflow-scrolling: touch;
+    background-color: var(--bs-body-bg);
 }
 
 body {
@@ -133,6 +166,11 @@ body {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.theme-toggle-btn {
+    min-width: 38px;
+    line-height: 1;
 }
 
 .current-group-badge {
@@ -338,6 +376,15 @@ body {
 .btn-action:disabled {
     cursor: wait;
     opacity: 0.72;
+}
+
+/* Tema claro: los botones semánticos conservan el color Bootstrap */
+[data-bs-theme="splitwise"] .btn-success.btn-action {
+    background: var(--bs-success);
+}
+
+[data-bs-theme="splitwise"] .btn-success.btn-action:hover {
+    background: #146c43;
 }
 
 .form-feedback {
@@ -972,4 +1019,75 @@ body {
 
 .custom-split-input {
     font-variant-numeric: tabular-nums;
+}
+
+/* ===== Tema claro: refinamiento estilo Dashboard SaaS ===== */
+[data-bs-theme="splitwise"] .app-header h1 {
+    letter-spacing: -0.025em;
+}
+
+[data-bs-theme="splitwise"] .app-card,
+[data-bs-theme="splitwise"] .metric-card {
+    border-radius: 14px;
+    border-color: #e9ecef;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.05);
+}
+
+[data-bs-theme="splitwise"] .balance-panel {
+    border-radius: 16px;
+    border-color: #e9ecef;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
+}
+
+[data-bs-theme="splitwise"] .balance-amount {
+    border-radius: 12px;
+    background: #f8f9fa;
+    border: 1px solid #eef0f2;
+}
+
+[data-bs-theme="splitwise"] .balance-amount strong,
+[data-bs-theme="splitwise"] .metric-card strong {
+    letter-spacing: -0.03em;
+}
+
+[data-bs-theme="splitwise"] .metric-card strong {
+    font-size: 1.6rem;
+}
+
+[data-bs-theme="splitwise"] .form-control,
+[data-bs-theme="splitwise"] .form-select {
+    border-radius: 10px;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="splitwise"] .form-control:focus,
+[data-bs-theme="splitwise"] .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+[data-bs-theme="splitwise"] .btn {
+    border-radius: 10px;
+}
+
+[data-bs-theme="splitwise"] #history-table th {
+    color: #6c757d;
+    font-weight: 600;
+}
+
+[data-bs-theme="splitwise"] #history-table tbody tr:hover td {
+    background: #f8f9fa;
+}
+
+[data-bs-theme="splitwise"] .current-group-badge {
+    background: #f1f3f5;
+    border: 1px solid #e9ecef;
+}
+
+[data-bs-theme="splitwise"] .app-tabs .nav-link {
+    border-radius: 8px 8px 0 0;
+}
+
+[data-bs-theme="splitwise"] .app-tabs .nav-link.active {
+    background: #f8f9fa;
 }

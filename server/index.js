@@ -481,9 +481,11 @@ app.get('/api/users/search', authMiddleware, async (req, res) => {
     const q = String(req.query.q || '').trim().toLowerCase();
     if (q.length < 2) return res.json([]);
     try {
+        // Los comodines del usuario son texto literal, no patrones LIKE.
+        const literal = q.replace(/[\\%_]/g, ch => `\\${ch}`);
         const result = await db.execute(
-            "SELECT username, name FROM users WHERE LOWER(username) LIKE ? OR LOWER(COALESCE(name, '')) LIKE ? ORDER BY username LIMIT 8",
-            [`${q}%`, `${q}%`]
+            "SELECT username, name FROM users WHERE LOWER(username) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(name, '')) LIKE ? ESCAPE '\\' ORDER BY username LIMIT 8",
+            [`${literal}%`, `${literal}%`]
         );
         res.json(result.rows.map(u => ({ username: u.username, name: u.name || u.username })));
     } catch (err) {

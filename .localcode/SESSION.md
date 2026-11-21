@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-21
-- **Rama**: `fix/theme-toggle` desde `main` (`a43c216`). PR #19 (`feature/dynamic-groups` → `main`) mergeado.
+- **Rama**: `ui/theme-button` desde `main` (`76bd19c`). PRs #19 y #20 mergeados; PR #21 abierto.
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -48,12 +48,20 @@
 - Smoke API con cuentas ficticias: invitación pendiente → aceptación → gasto → edición → baja → balance con inactivo → reactivación → borrado de cuentas. Todo OK.
 - UI en navegador: crear grupo, invitar, aceptar desde otra sesión, reparto N con suma validada, desglose y edición. Sin errores de consola. Cuentas de prueba eliminadas.
 - Merge de `origin/main`: pagos, CSV y filtro por fechas portados al modelo group-scoped. `npx jest tests/payment.int.test.js`: 9/9. Smoke UI con cuentas ficticias (alta, listado, baja, balances y sin errores de consola). Cuentas limpiadas.
-- Fix de tema: toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
+- Fix de tema (#20): toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
+- Botón de tema como ícono (🌙/☀️), fuera del dropdown de usuario y al lado de `+ Grupo`; verificado en navegador.
+- Rediseño del tema claro con paleta Bootstrap 5 estándar: fondo blanco `#ffffff`, primario azul `#0d6efd`, éxito verde `#198754`, peligro rojo `#dc3545`, grises `--bs-*`; `html` hereda el fondo; botón de pago conserva verde Bootstrap. Tema oscuro intacto (verificado estilos computados).
+- Tema claro refinado estilo **Dashboard SaaS** (referencia Dribbble de Apoorv Arora): cards con radio 14px y sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, tipografía de montos más marcada. Todo acotado a `[data-bs-theme="splitwise"]`; oscuro sin cambios.
+- `index.html` incluye `<meta name="darkreader-lock">` y el CSS usa `color-scheme: only light/dark` para que Dark Reader / auto-dark no pisen el tema.
+- Variables `-bs-*` del bloque oscuro completadas: encabezados de tabla legibles (fix de "Liquidaciones").
+- QA: `docs/QA_TESTING_PROMPT.md` (prompt reutilizable) y `docs/QA_REVIEW_2026-11-21.md` (resultados). Jest 9/9 y E2E manual OK.
+- Correcciones de QA (completas): persistencia de grupo (`seg_group`), validación estricta de fecha en gastos, escape de fórmulas en CSV, comodines LIKE escapados, moneda única en pagos, estado sin grupos, aclaración de pagador inactivo y docs actualizados.
+- Tests: 18/18 (`payment.int.test.js` + `expense.int.test.js`). QA review en `docs/QA_REVIEW_2026-11-21.md`.
 
 ## Próximos pasos
 
-1. PR #19 ya mergeado en `main`.
-2. Mergear el PR de `fix/theme-toggle` y confirmar que el deploy sirve el nuevo tema.
+1. PRs #19 y #20 ya mergeados en `main`.
+2. Mergear el PR [#21](https://github.com/Genoshan/wesplit/pull/21) y confirmar que el deploy sirve el botón ícono y el tema claro blanco.
 
 ## Restricciones vigentes
 
