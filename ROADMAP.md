@@ -22,11 +22,11 @@
 - [x] Guard de último admin activo; pagadores y splits desde miembros reales.
 - [x] Desglose de splits en el historial y reparto personalizado para N miembros.
 - [x] Endpoints legacy y tablas de recurrentes/tasas eliminados.
+- [x] Settle up: pagos entre miembros del grupo con historial, alta/baja y descuento en balances.
+- [x] Filtro por rango de fechas en el historial y exportación CSV por grupo.
 
 ### 🟡 Pendiente / diferido
-- [ ] **Settle up**: registrar pagos y que el balance los descuente (API existe, sin UI).
 - [ ] **Backoffice** para `global_role` y administración de cuentas.
-- [ ] **Exportar datos** (CSV/JSON).
 - [ ] **Gráfico temporal** y comparativa mes a mes.
 - [ ] **2FA** y notificaciones por email.
 - [ ] **Cotización diaria / multimoneda**: descartado por ahora (moneda única por grupo).

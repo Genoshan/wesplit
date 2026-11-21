@@ -13,8 +13,8 @@ Aplicación web de gastos compartidos inspirada en Splitwise, para uso doméstic
 - **Invitaciones**: por username exacto, sin link y sin aceptación del invitado. El invitado debe estar registrado antes.
 - **Roles**: dos niveles independientes — `users.global_role` (admin/member global) y `group_members.role` (admin/member dentro de cada grupo).
 - **Gastos**: modos `equal`, `solo` y `custom`. `evenSplits()` reparte los centavos sobrantes para que la suma de partes sea exacta entre N miembros.
-- **Balances**: calculados en servidor (`GET /api/groups/:id/balance`) con `total_paid - total_spent` por miembro.
-- **Pagos**: existe `POST /api/groups/:id/payments`, pero **todavía sin UI** y el balance **aún no los incluye** (pendiente).
+- **Balances**: calculados en servidor (`GET /api/groups/:id/balance`) con `total_paid - total_spent + pagos_net` por miembro.
+- **Pagos**: settle up integrado con `GET/POST/DELETE /api/groups/:id/payments`, UI en la pestaña Gastos, historial, descuento en balances y exportación CSV.
 - **Moneda**: **moneda única por grupo**, ya implementada. Se eliminaron la tabla `currencies`, el seed de tasas y sus endpoints; el alta de gasto ignora la moneda enviada y usa `base_currency` del grupo. No hay API de cotización por ahora.
 - **Recurrentes**: **eliminados por completo** (rutas, tabla, CSS y documentación) por bajo valor.
 - **Frontend**: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI en CDNs y CSP; sin handlers inline.

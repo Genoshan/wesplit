@@ -3,8 +3,10 @@ const defaultTheme = 'splitwise';
 let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;
-let historyFilters = { search: '', category: '', payer: '', month: '' };
+let historyFilters = { search: '', category: '', payer: '', month: '', from: '', to: '' };
 let inviteSearchTimer = null;
+let isSubmittingPayment = false;
+let allPayments = [];
 let currentUser = null;
 let currentGroupId = null;
 let currentGroupName = null;
@@ -314,6 +316,7 @@ async function loadExpenses() {
         updateChart();
         populateMonthFilter();
         renderMembers();
+        await loadPayments();
     } catch (err) {
         console.error('[APP] Failed to load expenses:', err);
     }
@@ -362,6 +365,7 @@ async function renderMembers() {
         currentGroupMembers = members;
         currentGroupCurrency = data.base_currency || currentGroupCurrency;
         renderPayerOptions();
+        renderPaymentOptions();
         updateSplitDisplay();
         if (members.length === 0) {
             container.innerHTML = '<p class="text-muted">No hay miembros.</p>';
@@ -555,6 +559,7 @@ async function ensureGroupMembers() {
     currentGroupMembers = group.members || [];
     currentGroupCurrency = group.base_currency || currentGroupCurrency;
     renderPayerOptions();
+    renderPaymentOptions();
     return currentGroupMembers;
 }
 
@@ -639,6 +644,147 @@ async function deleteExpense(expenseId) {
     }
 }
 
+// ── Pagos entre miembros (settle up) ──
+async function loadPayments() {
+    if (!currentGroupId) return;
+    try {
+        allPayments = await apiGet(`/api/groups/${currentGroupId}/payments`);
+        renderPayments();
+    } catch (err) {
+        console.error('[APP] Failed to load payments:', err);
+    }
+}
+
+function memberDisplayName(username) {
+    const member = (currentGroupMembers || []).find(m => m.username === username);
+    return member ? (String(member.name || '').trim() || member.username) : username;
+}
+
+function renderPaymentOptions() {
+    const active = (currentGroupMembers || []).filter(m => m.status === 'active');
+    const options = active.map(m => {
+        const label = escapeHtml(String(m.name || m.username).trim());
+        const mine = m.username === currentUser?.username;
+        return `<option value="${escapeHtml(m.username)}">${mine ? 'Vos · ' : ''}${label}${mine ? '' : ` (${escapeHtml(m.username)})`}</option>`;
+    }).join('');
+
+    const from = document.getElementById('payment-from');
+    const to = document.getElementById('payment-to');
+    if (!from || !to) return;
+    from.innerHTML = options;
+    to.innerHTML = options;
+    const mine = active.find(m => m.username === currentUser?.username);
+    if (mine) from.value = mine.username;
+    const other = active.find(m => m.username !== currentUser?.username);
+    if (other) to.value = other.username;
+    const submit = document.getElementById('add-payment-btn');
+    if (submit) submit.disabled = active.length < 2;
+}
+
+async function submitPayment() {
+    if (isSubmittingPayment) return;
+    const amount = parseFloat(document.getElementById('payment-amount')?.value);
+    const date = document.getElementById('payment-date')?.value;
+    const from = document.getElementById('payment-from')?.value;
+    const to = document.getElementById('payment-to')?.value;
+    const description = String(document.getElementById('payment-description')?.value || '').trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        Swal.fire('Atención', 'El monto debe ser un número mayor a cero.', 'warning');
+        return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+        Swal.fire('Atención', 'La fecha es obligatoria.', 'warning');
+        return;
+    }
+    if (!from || !to || from === to) {
+        Swal.fire('Atención', 'Elegí dos miembros distintos.', 'warning');
+        return;
+    }
+
+    isSubmittingPayment = true;
+    try {
+        await apiPost(`/api/groups/${currentGroupId}/payments`, {
+            from_user: from,
+            to_user: to,
+            amount,
+            currency: currentGroupCurrency,
+            date,
+            description
+        });
+        document.getElementById('payment-form')?.reset();
+        renderPaymentOptions();
+        await Promise.all([loadPayments(), renderBalances()]);
+        Swal.fire({ icon: 'success', title: 'Pago registrado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    } finally {
+        isSubmittingPayment = false;
+    }
+}
+
+async function deletePayment(paymentId) {
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}/payments/${paymentId}`);
+        await Promise.all([loadPayments(), renderBalances()]);
+        Swal.fire({ icon: 'success', title: 'Pago eliminado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+}
+
+function renderPayments() {
+    const body = document.getElementById('payments-body');
+    const count = document.getElementById('payments-count');
+    if (!body) return;
+    if (count) count.textContent = `${allPayments.length} pago${allPayments.length === 1 ? '' : 's'}`;
+    if (allPayments.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay pagos registrados</td></tr>';
+        return;
+    }
+    body.innerHTML = allPayments.map(payment => `
+        <tr>
+            <td>${formatDate(payment.date)}</td>
+            <td>${escapeHtml(payment.description || 'Sin descripción')}</td>
+            <td class="text-end">${formatCurrency(payment.amount)}</td>
+            <td>${escapeHtml(memberDisplayName(payment.from_user))} → ${escapeHtml(memberDisplayName(payment.to_user))}</td>
+            <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" data-payment-delete="${payment.id}" title="Eliminar pago">Eliminar</button></td>
+        </tr>
+    `).join('');
+    body.querySelectorAll('[data-payment-delete]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const result = await Swal.fire({
+                title: '¿Eliminar este pago?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Eliminar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (result.isConfirmed) await deletePayment(btn.dataset.paymentDelete);
+        });
+    });
+}
+
+async function exportToCsv() {
+    if (!currentGroupId) return;
+    try {
+        const response = await fetch(`/api/groups/${currentGroupId}/export/csv`);
+        if (!response.ok) throw new Error('Error en la red: ' + response.status);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `wesplit-${currentGroupId}-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        link.remove();
+    } catch (err) {
+        console.error('[APP] Failed to export CSV:', err);
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo exportar el CSV.' });
+    }
+}
+
 function renderExpenses() {
     const container = document.getElementById('expense-list');
     if (!container) return;
@@ -651,6 +797,8 @@ function renderExpenses() {
             const m = e.date.substring(0, 7);
             if (m !== historyFilters.month) return false;
         }
+        if (historyFilters.from && e.date < historyFilters.from) return false;
+        if (historyFilters.to && e.date > historyFilters.to) return false;
         return true;
     });
 
@@ -1168,6 +1316,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Filtro por rango de fechas y exportación (solo afectan al historial)
+    const dateFromInput = document.getElementById('date-from');
+    const dateToInput = document.getElementById('date-to');
+    dateFromInput?.addEventListener('change', () => {
+        historyFilters.from = dateFromInput.value;
+        renderExpenses();
+    });
+    dateToInput?.addEventListener('change', () => {
+        historyFilters.to = dateToInput.value;
+        renderExpenses();
+    });
+    document.getElementById('export-csv-btn')?.addEventListener('click', exportToCsv);
+
+    // Pagos entre miembros (settle up)
+    document.getElementById('payment-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitPayment();
+    });
+    const toggleModeBtn = document.getElementById('toggle-mode-btn');
+    let paymentMode = false;
+    toggleModeBtn?.addEventListener('click', () => {
+        paymentMode = !paymentMode;
+        const expenseForm = document.getElementById('expense-form');
+        const paymentForm = document.getElementById('payment-form');
+        const title = document.getElementById('form-title');
+        toggleModeBtn.textContent = paymentMode ? 'Cambiar a Gasto' : 'Cambiar a Pago';
+        if (expenseForm) expenseForm.style.display = paymentMode ? 'none' : '';
+        if (paymentForm) {
+            paymentForm.style.display = paymentMode ? '' : 'none';
+            if (paymentMode) {
+                const paymentDate = document.getElementById('payment-date');
+                if (paymentDate) paymentDate.value = new Date().toISOString().split('T')[0];
+                renderPaymentOptions();
+            }
+        }
+        if (title) title.textContent = paymentMode ? 'Registrar pago' : 'Agregar gasto';
+    });
+
     // Load
     loadAuth();
 });
+
+window.submitPayment = submitPayment;
+window.deletePayment = deletePayment;
+window.exportToCsv = exportToCsv;

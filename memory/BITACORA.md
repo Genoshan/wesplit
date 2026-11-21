@@ -298,7 +298,7 @@ Cada entrada debe seguir este formato:
 - Un solo campo `status` para invitaciones y bajas, en vez de dos tablas o estados separados.
 - Los miembros inactivos siguen en balances porque tienen historial; los pendientes no.
 - Se descartó el link con token: la aceptación ocurre dentro de la app.
-- Settle up y cotización diaria quedan diferidos; backoffice no se implementa ahora.
+- Settle up queda integrado en el modelo group-scoped (pagos con alta/baja/historial, descuento en balances, CSV y filtro por fechas); cotización diaria sigue diferida; backoffice no se implementa ahora.
 
 ### Estado final
 - Smoke tests end-to-end con cuentas ficticias (API): invitación pendiente → aceptación → gasto → edición → baja → balance → reactivación → borrado de cuentas. Todo OK.
@@ -309,4 +309,5 @@ Cada entrada debe seguir este formato:
 ### Notas para próxima sesión
 - Revisar el diff completo vs `origin/main` antes de autorizar `add`/`commit`/`push`/PR.
 - No leer valores de `server/.env`; dejar intactos los hallazgos ALTO de secretos en logs.
-- Pendiente de confirmación: archivar `.claude/docs/ROADMAP.md`, rotar contenido sensible en logs y convertir `README.md` en índice de documentación.
+- Merge de `origin/main` resuelto conservando la arquitectura group-scoped: se portaron pagos, CSV y filtro de fechas; tests 9/9 y smoke UI OK; queda `git add`, merge commit y push autorizados.
+- PR final lo crea el usuario en GitHub (`feature/dynamic-groups` → `main`).

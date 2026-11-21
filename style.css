@@ -318,6 +318,10 @@ body {
     margin-bottom: 18px;
 }
 
+#toggle-mode-btn {
+    margin-top: 8px;
+}
+
 .section-heading h2 {
     font-size: 1.25rem;
     font-weight: 720;
@@ -350,6 +354,18 @@ body {
 
 .filter-select {
     width: 100%;
+}
+
+.date-filter {
+    width: 100%;
+    min-width: 140px;
+}
+
+#export-csv-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
 }
 
 .form-container {

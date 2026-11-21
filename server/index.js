@@ -3,6 +3,29 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 process.on('uncaughtException', (err) => { console.error('[FATAL]', err); process.exit(1); });
 process.on('unhandledRejection', (reason, promise) => { console.error('[UNHANDLED]', reason); });
 
+function categoryName(cat) {
+    const names = {
+        'food': 'Alimentación',
+        'transport': 'Transporte',
+        'entertainment': 'Ocio',
+        'bills': 'Servicios',
+        'others': 'Otros'
+    };
+    return names[cat] || cat;
+}
+
+function payerName(payer) {
+    return payer === 'me' ? 'Tin' : 'Noe';
+}
+
+function fromUser(user) {
+    return user === 'me' ? 'Tin' : 'Noe';
+}
+
+function toUser(user) {
+    return user === 'me' ? 'Noe' : 'Tin';
+}
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const helmet = require('helmet');

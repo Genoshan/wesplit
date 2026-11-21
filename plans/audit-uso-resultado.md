@@ -7,8 +7,8 @@
 > invitación normalizada con sugerencias **y aceptación/rechazo del invitado**), H8 (modal de edición con
 > `PUT` group-scoped), H9 (desglose de splits en el historial y reparto personalizado para N miembros) y
 > H10 (CSS/UX: `--border-color`, `#category-chart`, `min`, filtros rotulados, doble request de balance,
-> etiqueta "Partes iguales"). **Único hallazgo vigente:** H2 — settle up sigue diferido (existe
-> `POST /api/groups/:id/payments`, sin UI y el balance no descuenta pagos). Los ejes 6 y 7 del prompt
+> etiqueta "Partes iguales") y H2 (settle up integrado: alta/baja e historial de pagos group-scoped,
+> descuento en balances, filtro por rango de fechas y exportación CSV). Los ejes 6 y 7 del prompt
 > `audit-uso-splitwise.md` ya no aplican.
 
 Ejecutada el 2026-11-20 con tres auditores de solo lectura (onboarding/grupos, gastos/balances, confianza/UX). Hallazgos verificados personalmente contra el código. No se modificó código de la app ni se escribió en la BD.

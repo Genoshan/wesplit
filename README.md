@@ -33,4 +33,4 @@ El frontend es estático (`index.html`, `app.js`, `style.css`) servido por el pr
 - Miembros inactivos conservan historial y balances; se pueden reactivar.
 - Moneda única por grupo. Recurrentes y tasas de cambio eliminados.
 - `global_role` se conserva como dato informativo, sin backoffice.
-- Settle up y cotización diaria quedan diferidos.
+- Settle up (pagos del grupo) y exportación CSV ya están integrados; la cotización diaria sigue diferida.

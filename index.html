@@ -117,6 +117,7 @@
                             <div class="section-heading">
                                 <p class="eyebrow">Nuevo movimiento</p>
                                 <h2 id="form-title">Agregar gasto</h2>
+                                <button type="button" id="toggle-mode-btn" class="btn btn-sm btn-outline-primary">Cambiar a Pago</button>
                             </div>
                             <form id="expense-form" class="form-container">
                                 <label for="expense-date">Fecha</label>
@@ -156,6 +157,26 @@
                                 <div id="split-display"></div>
                                 <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Agregar gasto</button>
                             </form>
+                            <form id="payment-form" class="form-container" style="display:none;">
+                                <label for="payment-amount">Monto</label>
+                                <input type="number" id="payment-amount" class="form-control" min="0.01" step="0.01" required>
+                                <label for="payment-date">Fecha</label>
+                                <input type="date" id="payment-date" class="form-control" required>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-6">
+                                        <label for="payment-from">De</label>
+                                        <select id="payment-from" class="form-select" required></select>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label for="payment-to">Para</label>
+                                        <select id="payment-to" class="form-select" required></select>
+                                    </div>
+                                </div>
+                                <label for="payment-description">Descripción</label>
+                                <input type="text" id="payment-description" class="form-control" placeholder="Ej. Pago parcial de deuda">
+                                <button type="submit" class="btn btn-success btn-action w-100" id="add-payment-btn">Registrar pago</button>
+                                <p class="small text-muted mt-2 mb-0">El pago ajusta los balances del grupo. La moneda es la del grupo.</p>
+                            </form>
                         </div>
                     </section>
                     <section class="card app-card history-card" aria-labelledby="history-title">
@@ -183,9 +204,39 @@
                                 <select id="month-filter" class="form-select filter-select" aria-label="Filtrar por mes">
                                     <option value="">Todos los meses</option>
                                 </select>
+                                <input type="date" id="date-from" class="form-control date-filter" title="Fecha desde" aria-label="Fecha desde">
+                                <input type="date" id="date-to" class="form-control date-filter" title="Fecha hasta" aria-label="Fecha hasta">
+                                <button type="button" id="export-csv-btn" class="btn btn-outline-secondary btn-sm" title="Exportar CSV del grupo">Exportar CSV</button>
                             </div>
                             <p class="small text-muted mt-2 mb-0">Los filtros solo afectan al historial. Balances y estadísticas muestran todos los períodos.</p>
                             <div id="expense-list" class="expense-list"></div>
+                        </div>
+                    </section>
+                    <section class="card app-card payments-card" aria-labelledby="payments-title">
+                        <div class="card-body p-4">
+                            <div class="section-heading payments-heading">
+                                <div>
+                                    <p class="eyebrow">Liquidaciones</p>
+                                    <h2 id="payments-title">Historial de pagos</h2>
+                                </div>
+                                <span id="payments-count" class="history-count">0 pagos</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table id="payments-table" class="table table-hover table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th class="text-start">Fecha</th>
+                                            <th class="text-start">Descripción</th>
+                                            <th class="text-end">Monto</th>
+                                            <th class="text-start">De / Para</th>
+                                            <th class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="payments-body">
+                                        <tr><td colspan="5" class="text-center text-muted py-4">No hay pagos registrados</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </section>
                 </div>

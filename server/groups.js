@@ -775,7 +775,7 @@ router.get('/:id/balance', async (req, res) => {
         const balances = {};
         const usernameToId = {};
         for (const m of membersResult.rows) {
-            balances[m.user_id] = { user_id: m.user_id, username: m.username, balance: 0, total_paid: 0, total_spent: 0 };
+            balances[m.user_id] = { user_id: m.user_id, username: m.username, balance: 0, total_paid: 0, total_spent: 0, payments_net: 0 };
             usernameToId[m.username] = m.user_id;
         }
 
@@ -798,8 +798,23 @@ router.get('/:id/balance', async (req, res) => {
             }
         }
 
+        // Los pagos ajustan el saldo: quien paga reduce su deuda (o aumenta su
+        // crédito) y quien recibe hace el camino inverso. Se guardan aparte para
+        // no mezclarlos con lo pagado/gastado en gastos.
+        const paymentsResult = await db.execute(
+            'SELECT from_user, to_user, amount FROM group_payments WHERE group_id = ?', [groupId]
+        );
+        for (const payment of paymentsResult.rows) {
+            const fromId = usernameToId[payment.from_user] || payment.from_user;
+            const toId = usernameToId[payment.to_user] || payment.to_user;
+            const value = Number(payment.amount) || 0;
+            if (balances[fromId]) balances[fromId].payments_net += value;
+            if (balances[toId]) balances[toId].payments_net -= value;
+        }
+
         for (const key of Object.keys(balances)) {
-            balances[key].balance = balances[key].total_paid - balances[key].total_spent;
+            const b = balances[key];
+            b.balance = b.total_paid - b.total_spent + b.payments_net;
         }
 
         res.json({ members: membersResult.rows, balances: Object.values(balances) });
@@ -825,6 +840,16 @@ router.post('/:id/payments', async (req, res) => {
         if (!from_user || !to_user) {
             return res.status(400).json({ error: 'from_user y to_user son requeridos' });
         }
+        if (String(from_user) === String(to_user)) {
+            return res.status(400).json({ error: 'No podés pagarte a vos mismo' });
+        }
+        const cleanDate = String(date || new Date().toISOString().split('T')[0]);
+        const parsedDate = new Date(`${cleanDate}T00:00:00Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate) ||
+            Number.isNaN(parsedDate.getTime()) ||
+            parsedDate.toISOString().split('T')[0] !== cleanDate) {
+            return res.status(400).json({ error: 'Fecha inválida' });
+        }
 
         const memberCheck = await db.execute(
             'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
@@ -843,17 +868,144 @@ router.post('/:id/payments', async (req, res) => {
             return res.status(400).json({ error: 'Los participantes deben ser miembros del grupo' });
         }
 
-        const currencyCode = currency || 'UYU';
+        const currencyCode = normalizeCurrency(currency);
+        if (!currencyCode) {
+            return res.status(400).json({ error: 'Moneda inválida' });
+        }
 
-        await db.execute({
+        const result = await db.execute({
             sql: 'INSERT INTO group_payments (group_id, from_user, to_user, amount, currency, date, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            args: [groupId, fromName, toName, parsedAmount, currencyCode, date || new Date().toISOString().split('T')[0], description || '']
+            args: [groupId, fromName, toName, parsedAmount, currencyCode, cleanDate, String(description || '').trim()]
         });
 
-        console.log(`[GROUPS] Pago registrado: ${from_user} -> ${to_user} (${amount}) en grupo ${groupId}`);
-        res.json({ message: 'Pago registrado con éxito' });
+        const insertedId = result.lastInsertRowid;
+        console.log(`[GROUPS] Pago registrado: ${fromName} -> ${toName} (${parsedAmount}) en grupo ${groupId}`);
+        res.json({ id: Number(insertedId), message: 'Pago registrado con éxito' });
     } catch (err) {
         console.error('[GROUPS] Error registrando pago:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// GET /:id/payments — historial de pagos del grupo
+// ────────────────────────────────────────
+router.get('/:id/payments', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, req.user.userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const result = await db.execute(
+            'SELECT id, from_user, to_user, amount, currency, date, description FROM group_payments WHERE group_id = ? ORDER BY date DESC, id DESC',
+            [groupId]
+        );
+        const members = await getGroupMembers(groupId, ['active', 'inactive']);
+        const nameOf = username => members.find(m => m.username === username)?.name || username;
+        res.json(result.rows.map(p => ({
+            ...p,
+            from_name: nameOf(p.from_user),
+            to_name: nameOf(p.to_user)
+        })));
+    } catch (err) {
+        console.error('[GROUPS] Error listando pagos:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// DELETE /:id/payments/:paymentId
+// ────────────────────────────────────────
+router.delete('/:id/payments/:paymentId', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, req.user.userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const result = await db.execute(
+            'DELETE FROM group_payments WHERE id = ? AND group_id = ?',
+            [req.params.paymentId, groupId]
+        );
+        // libsql usa rowsAffected (no changes).
+        if (!result.rowsAffected) {
+            return res.status(404).json({ error: 'Pago no encontrado' });
+        }
+        res.json({ message: 'Pago eliminado con éxito' });
+    } catch (err) {
+        console.error('[GROUPS] Error eliminando pago:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// GET /:id/export/csv — gastos y pagos del grupo
+// ────────────────────────────────────────
+router.get('/:id/export/csv', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, req.user.userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const groupResult = await db.execute('SELECT name, base_currency FROM groups WHERE id = ?', [groupId]);
+        const group = groupResult.rows[0] || {};
+        const currency = normalizeCurrency(group.base_currency) || 'UYU';
+        const members = await getGroupMembers(groupId, ['active', 'inactive']);
+        const nameOf = username => members.find(m => m.username === username)?.name || username;
+        const esc = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+        const expensesResult = await db.execute(
+            'SELECT date, description, amount, category, payer FROM group_expenses WHERE group_id = ? ORDER BY date DESC, id DESC',
+            [groupId]
+        );
+        const splitsResult = await db.execute(`
+            SELECT s.expense_id, s.user_id, s.amount
+            FROM group_splits s
+            JOIN group_expenses e ON e.id = s.expense_id
+            WHERE e.group_id = ?
+        `, [groupId]);
+        const paymentsResult = await db.execute(
+            'SELECT date, description, amount, from_user, to_user FROM group_payments WHERE group_id = ? ORDER BY date DESC, id DESC',
+            [groupId]
+        );
+
+        const expenseRows = expensesResult.rows.map(e => {
+            const parts = splitsResult.rows
+                .filter(s => String(s.expense_id) === String(e.id))
+                .map(s => `${nameOf(s.user_id)}: ${Number(s.amount).toFixed(2)}`)
+                .join(' | ');
+            return [e.date, esc(e.description), esc(e.category || 'Otros'), Number(e.amount).toFixed(2),
+                esc(nameOf(e.payer)), esc(parts)].join(',');
+        });
+        const paymentRows = paymentsResult.rows.map(p => [
+            p.date, esc(p.description), Number(p.amount).toFixed(2),
+            esc(nameOf(p.from_user)), esc(nameOf(p.to_user))
+        ].join(','));
+
+        const header = `Grupo,${esc(group.name || '')},Moneda,${currency}`;
+        const expenseHeader = 'Fecha,Descripción,Categoría,Monto,Pagador,Reparto';
+        const paymentHeader = 'Fecha,Descripción,Monto,De,Para';
+        const csv = [header, '', expenseHeader, ...expenseRows, '', paymentHeader, ...paymentRows].join('\n');
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="wesplit-${groupId}.csv"`);
+        res.send(csv);
+    } catch (err) {
+        console.error('[GROUPS] Error exportando CSV:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });

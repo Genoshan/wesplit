@@ -19,6 +19,6 @@
 - [2026-11-20] | **Edición de gastos** | Implementada con modal y `PUT /api/groups/:id/expenses/:expenseId`. Recalcula splits (incluye inactivos para no perder partes históricas) y fuerza la moneda del grupo. El endpoint legacy sigue eliminado.
 - [2026-11-20] | **Reparto personalizado** | La UI reemplaza el par fijo "yo / pareja" por un input por miembro del grupo con validación de suma en centavos; el servidor valida montos y miembros.
 - [2026-11-20] | **Desglose** | Cada gasto del historial puede expandirse para ver la parte de cada miembro.
-- [2026-11-20] | **Liquidación "Settle up"** | Diferida pero queda registrada como pendiente: el endpoint de pagos existe, sin UI y sin impacto en el balance.
+- [2026-11-20] | **Liquidación "Settle up"** | Integrada en el merge con `origin/main`: pagos group-scoped (GET/POST/DELETE), UI, descuento en balances, historial y CSV.
 - [2026-11-20] | **Sin backoffice** | La administración que importa resuelve por grupo (admins de grupo). `global_role` queda sin uso práctico al retirar el CRUD de tasas.
 - [2026-11-20] | **Orden de trabajo** | Priorizar por dificultad de implementación (lote fácil → medio → difícil), con la actualización documental al final.

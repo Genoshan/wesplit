@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-20
-- **Rama**: `feature/dynamic-groups` (33 commits locales + cambios sin commitear). PR final a `main` pendiente de autorización.
+- **Rama**: `feature/dynamic-groups` (commit `db8b96d` + merge de `origin/main` en curso/resuelto). PR final a `main` pendiente de autorización.
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -38,7 +38,7 @@
 - Recurrentes y tasas de cambio.
 
 ### Pendiente diferido
-- Settle up: `POST /api/groups/:id/payments` existe, sin UI y el balance no descuenta pagos.
+- ~~Settle up: sin UI~~ → integrado: pagos group-scoped (GET/POST/DELETE), balance descontado, historial y CSV.
 - Backoffice de `global_role`; cotización diaria vía API.
 
 ## Verificación
@@ -47,11 +47,12 @@
 - `git diff --check` sin errores de whitespace (solo avisos LF→CRLF conocidos).
 - Smoke API con cuentas ficticias: invitación pendiente → aceptación → gasto → edición → baja → balance con inactivo → reactivación → borrado de cuentas. Todo OK.
 - UI en navegador: crear grupo, invitar, aceptar desde otra sesión, reparto N con suma validada, desglose y edición. Sin errores de consola. Cuentas de prueba eliminadas.
+- Merge de `origin/main`: pagos, CSV y filtro por fechas portados al modelo group-scoped. `npx jest tests/payment.int.test.js`: 9/9. Smoke UI con cuentas ficticias (alta, listado, baja, balances y sin errores de consola). Cuentas limpiadas.
 
 ## Próximos pasos
 
-1. Revisar el diff completo vs `origin/main` (G2–G6, allowlist, borrado de legacy, lote S y lote M).
-2. Pedir autorización explícita para `git add` / `commit` / `push` / PR.
+1. Revisar el diff final del merge vs `origin/main` y confirmar el merge commit.
+2. Push de `feature/dynamic-groups`; el usuario crea el PR a `main`.
 
 ## Restricciones vigentes
 

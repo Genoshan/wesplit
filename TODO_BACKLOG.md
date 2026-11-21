@@ -15,12 +15,12 @@ Estado al 2026-11-20. Los ítems resueltos se conservan marcados para no reabrir
 - [x] Filtros rotulados como "solo historial"; balances y gráfico "todos los períodos".
 - [x] CSP + SRI, escapeo de HTML, rate limits y protección de IDOR.
 - [x] Historial con filtros, resumen de deudas y estados vacíos.
+- [x] Pagos entre miembros del grupo (settle up) con descuento en balances e historial.
+- [x] Filtro por rango de fechas y exportación CSV del grupo.
 
 ## 🟡 Pendiente / diferido
 
-- [ ] **Settle up**: UI para `POST /api/groups/:id/payments` y descuento de pagos en el balance.
 - [ ] **Backoffice**: administración de `global_role` y cuentas.
-- [ ] **Exportar datos** (CSV/JSON).
 - [ ] **Gráfico temporal** y comparativa mes a mes.
 - [ ] **Indicador de carga** en acciones lentas del formulario y de invitaciones.
 - [ ] **2FA** y notificaciones por email.
