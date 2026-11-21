@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const https = require('https');
 const { URL } = require('url');
 const db = require('./database');
+const { verifyValue, needsRehash, hashPassword } = require('./password');
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;  // 10 minutos
@@ -24,35 +25,19 @@ function parseCookies(header) {
 // Auth: credenciales desde DB (con fallback a legacy)
 // ────────────────────────────────────────
 
-function simpleHashVerify(input, stored) {
-    if (!stored) return false;
-    let hash = 0;
-    for (let i = 0; i < input.length; i++) {
-        const ch = input.charCodeAt(i);
-        hash = ((hash << 5) - hash) + ch;
-        hash = hash & hash;
-    }
-    return stored === `simple:${Math.abs(hash).toString(16)}`;
-}
-
 async function findUser(username) {
-    try {
-        const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
-        if (result.rows.length > 0) return result.rows[0];
-    } catch (e) {
-        console.warn('[AUTH] No se pudo consultar tabla users, usando fallback en memoria');
-    }
-    return null;
+    // Propagar errores de DB: antes se devolvía null ante CUALQUIER fallo, lo
+    // que activaba el fallback legacy y podía crear una sesión admin sin DB.
+    const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+    return result.rows.length > 0 ? result.rows[0] : null;
 }
 
 async function findUserByEmail(email) {
-    try {
-        const result = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-        if (result.rows.length > 0) return result.rows[0];
-    } catch (e) {
-        console.warn('[AUTH] No se pudo consultar tabla users por email');
-    }
-    return null;
+    // Normalizar: la comparación BINARY permitía registrar "Victim@x.com" y
+    // capturar el login OAuth de "victim@x.com".
+    const normalized = String(email || '').trim().toLowerCase();
+    const result = await db.execute('SELECT * FROM users WHERE LOWER(email) = ?', [normalized]);
+    return result.rows.length > 0 ? result.rows[0] : null;
 }
 
 function findUserLegacy(username) {
@@ -70,13 +55,22 @@ async function verifyPasswordDB(username, password) {
     const user = await findUser(username);
     if (!user) return null;
 
-    // Verificar password_hash (simpleHash o bcrypt)
-    if (user.password_hash && user.password_hash.startsWith('simple:')) {
-        if (simpleHashVerify(password, user.password_hash)) {
-            return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member', name: user.name || user.username };
+    const ok = await verifyValue(password, user.password_hash);
+    if (!ok) return null;
+
+    // Migración transparente: si el hash era del esquema viejo ('simple:'),
+    // lo reemplazamos por bcrypt usando la contraseña recién verificada.
+    if (needsRehash(user.password_hash)) {
+        try {
+            await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [
+                await hashPassword(password), user.id
+            ]);
+        } catch (e) {
+            console.error('[AUTH] No se pudo migrar el hash de password:', e);
         }
     }
-    return null;
+
+    return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member', name: user.name || user.username };
 }
 
 async function verifyPassword(username, password) {
@@ -84,7 +78,12 @@ async function verifyPassword(username, password) {
     const dbUser = await verifyPasswordDB(username, password);
     if (dbUser) return dbUser;
 
-    // Fallback a legacy (hardcoded)
+    // Fallback a legacy (AUTH_TIN/AUTH_NOE) solo si el username NO existe en DB.
+    // Si existe, una contraseña vieja en el entorno no debe poder sobrevivir
+    // a un cambio de contraseña hecho desde /api/profile.
+    const existing = await findUser(username);
+    if (existing) return null;
+
     const legacy = findUserLegacy(username);
     if (legacy && legacy.password === password) {
         return { id: legacy.username === 'tin' ? 1 : 2, username: legacy.username, global_role: 'admin', name: legacy.username.charAt(0).toUpperCase() + legacy.username.slice(1) };
@@ -199,14 +198,10 @@ async function login(username, password) {
         return null;
     }
 
-    await createSession(user.id);
-
-    // Revisar si la sesión fue creada
-    const tokenResult = await db.execute('SELECT token FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [user.id]);
-    if (tokenResult.rows.length > 0) {
-        return tokenResult.rows[0].token;
-    }
-    return generateToken(); // fallback
+    // Devolver directamente el token creado. Antes se re-leía con
+    // ORDER BY created_at DESC (granularidad de segundo), lo que podía
+    // devolver el token de otro login concurrente del mismo usuario.
+    return createSession(user.id);
 }
 
 function logout(token) {
@@ -296,27 +291,44 @@ function exchangeCodeForToken(code, redirectUri) {
     });
 }
 
-function getGoogleRedirectUri(req, clientOrigin) {
+// El origen lo envía el navegador, por lo que no es confiable: se acepta solo
+// si está en ALLOWED_ORIGINS (o es el local por defecto). Así no se puede
+// desviar el código de autorización de Google a un host externo.
+function isAllowedOrigin(origin) {
+    if (!origin) return false;
+    let parsed;
+    try {
+        parsed = new URL(origin);
+    } catch {
+        return false;
+    }
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) return false;
+
+    const port = process.env.PORT || 4000;
+    const allowed = [
+        ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+        `http://localhost:${port}`,
+        `http://127.0.0.1:${port}`
+    ];
+    return allowed.some(candidate => {
+        try {
+            return new URL(candidate).origin === parsed.origin;
+        } catch {
+            return candidate === origin;
+        }
+    });
+}
+
+function getGoogleRedirectUri(clientOrigin) {
+    // Nunca derivar el redirect_uri de Host / X-Forwarded-Host: son
+    // controlables por el cliente y permiten desviar el code de autorización.
     if (process.env.GOOGLE_REDIRECT_URI) {
         return process.env.GOOGLE_REDIRECT_URI;
     }
-    if (clientOrigin) {
-        return `${clientOrigin}/api/google/callback`;
+    if (isAllowedOrigin(clientOrigin)) {
+        return `${new URL(clientOrigin).origin}/api/google/callback`;
     }
-    const port = process.env.PORT || 4000;
-    let host;
-    if (req) {
-        host = req.get('x-forwarded-host') || req.get('host') || `localhost:${port}`;
-    } else {
-        host = process.env.NODE_ENV === 'production'
-            ? `https://wesplit.genoshan.com`
-            : `http://localhost:${port}`;
-    }
-    if (!host.startsWith('http')) {
-        const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-        host = `${proto}://${host}`;
-    }
-    return `${host}/api/google/callback`;
+    return null;
 }
 
 function cleanGoogleSessions() {
@@ -332,6 +344,22 @@ function cleanGoogleSessions() {
 function emailToUsername(email) {
     const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
     return base || 'user';
+}
+
+// Allowlist de emails habilitados para entrar con Google.
+// - Variable AUSENTE: se permite cualquier email verificado (comportamiento legacy).
+// - Variable PRESENTE (incluso vacía): se aplica la lista; vacía = ninguno.
+// Se compara en lowercase porque Gmail es case-insensitive y el email ya se
+// normalizó arriba; así se evita el bypass "Victim@x.com" vs "victim@x.com".
+function isGoogleEmailAllowed(email) {
+    if (process.env.GOOGLE_AUTHORIZED_EMAILS === undefined) return true;
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) return false;
+    const allowed = process.env.GOOGLE_AUTHORIZED_EMAILS
+        .split(',')
+        .map(entry => entry.trim().toLowerCase())
+        .filter(Boolean);
+    return allowed.includes(normalized);
 }
 
 // Verifica si un username ya existe
@@ -351,7 +379,7 @@ async function uniqueUsername(base) {
     return username;
 }
 
-async function initGoogleAuth(req, clientOrigin) {
+async function initGoogleAuth(clientOrigin) {
     if (!process.env.GOOGLE_CLIENT_ID) {
         console.error('[AUTH] Falta GOOGLE_CLIENT_ID en variables de entorno');
         return null;
@@ -363,17 +391,33 @@ async function initGoogleAuth(req, clientOrigin) {
     }
 
     cleanGoogleSessions();
+    const redirectUri = getGoogleRedirectUri(clientOrigin);
+    if (!redirectUri) {
+        return null;
+    }
     const state = crypto.randomBytes(32).toString('hex');
-    const redirectUri = getGoogleRedirectUri(req, clientOrigin);
+    const cookieToken = crypto.randomBytes(32).toString('hex');
     const authUrl = buildGoogleAuthUrl(process.env.GOOGLE_CLIENT_ID, redirectUri, state);
-    googleSessions.set(state, { redirectUri, createdAt: Date.now() });
-    return { authUrl, state };
+    googleSessions.set(state, { redirectUri, cookieToken, createdAt: Date.now() });
+    return { authUrl, state, cookieToken };
 }
 
-async function handleGoogleCallback(code, state) {
+async function handleGoogleCallback(code, state, cookieToken) {
     const sessionData = googleSessions.get(state);
     if (!sessionData) {
         return { error: 'Estado inválido o expirado' };
+    }
+
+    // Consumir el state ANTES de cualquier llamada de red: anti-replay.
+    googleSessions.delete(state);
+
+    if (Date.now() - sessionData.createdAt > GOOGLE_STATE_TTL_MS) {
+        return { error: 'Estado expirado' };
+    }
+    // El state debe venir acompañado del nonce que pusimos en la cookie del
+    // browser que inició el flujo; si no, es un login-CSRF.
+    if (!cookieToken || cookieToken !== sessionData.cookieToken) {
+        return { error: 'Estado inválido' };
     }
 
     try {
@@ -393,14 +437,17 @@ async function handleGoogleCallback(code, state) {
             }).on('error', reject);
         });
 
-        const email = userInfoResult.email;
+        const email = String(userInfoResult.email || '').trim().toLowerCase();
         if (!email) {
             googleSessions.delete(state);
             return { error: 'No se pudo obtener el email de Google' };
         }
-        if (userInfoResult.email_verified === false) {
+        if (userInfoResult.email_verified !== true) {
             googleSessions.delete(state);
             return { error: 'El email de Google no está verificado' };
+        }
+        if (!isGoogleEmailAllowed(email)) {
+            return { error: 'Este email no está autorizado para ingresar' };
         }
 
         // Obtener nombre del usuario desde Google
@@ -434,13 +481,7 @@ async function handleGoogleCallback(code, state) {
 
             // Crear usuario con password aleatorio (no usará password, solo Google OAuth)
             const randomPassword = crypto.randomBytes(16).toString('hex');
-            let hash = 0;
-            for (let i = 0; i < randomPassword.length; i++) {
-                const ch = randomPassword.charCodeAt(i);
-                hash = ((hash << 5) - hash) + ch;
-                hash = hash & hash;
-            }
-            const passwordHash = 'simple:' + Math.abs(hash).toString('hex');
+            const passwordHash = await hashPassword(randomPassword);
 
             const insertResult = await db.execute({
                 sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
@@ -448,10 +489,10 @@ async function handleGoogleCallback(code, state) {
             });
             dbUser = { id: Number(insertResult.lastInsertRowid), username, name: googleName || username };
 
-            // Auto-crear grupo "Casa"
+            // Auto-crear grupo personal "Mis gastos"
             const groupResult = await db.execute({
                 sql: 'INSERT INTO groups (name, owner_id, base_currency) VALUES (?, ?, ?)',
-                args: ['Casa', dbUser.id, 'UYU']
+                args: ['Mis gastos', dbUser.id, 'UYU']
             });
             const groupId = groupResult.lastInsertRowid;
             await db.execute({
@@ -459,14 +500,14 @@ async function handleGoogleCallback(code, state) {
                 args: [groupId, dbUser.id, 'admin']
             });
 
-            console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (${email}), nombre: ${googleName}, grupo Casa (ID: ${groupId})`);
+            console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (id: ${dbUser.id}), grupo Mis gastos (ID: ${groupId})`);
         } else {
             // Actualizar nombre si no tiene
             if (!dbUser.name && googleName) {
                 await db.execute('UPDATE users SET name = ? WHERE id = ?', [googleName, dbUser.id]);
             }
             dbUser.name = dbUser.name || googleName || dbUser.username;
-            console.log(`[GOOGLE AUTH] Usuario existente: ${dbUser.username} (${email})`);
+            console.log(`[GOOGLE AUTH] Usuario existente: ${dbUser.username} (id: ${dbUser.id})`);
         }
 
         // Crear sesión
@@ -484,8 +525,8 @@ async function handleGoogleCallback(code, state) {
         googleSessions.delete(state);
         return { token, user: dbUser.username };
     } catch (err) {
-        googleSessions.delete(state);
-        return { error: err.message || 'Error al autenticar con Google' };
+        console.error('[GOOGLE AUTH] Error en callback:', err.message);
+        return { error: 'No se pudo completar la autenticación con Google' };
     }
 }
 
@@ -495,8 +536,8 @@ async function getUserGroups(userId) {
             SELECT g.*, gm.role as member_role
             FROM groups g
             JOIN group_members gm ON g.id = gm.group_id
-            WHERE gm.user_id = ?
-            ORDER BY g.name ASC
+            WHERE gm.user_id = ? AND gm.status = 'active'
+            ORDER BY COALESCE(g.created_at, 0) ASC, g.id ASC
         `, [userId]);
         return result.rows;
     } catch (e) {
@@ -513,6 +554,7 @@ module.exports = {
     getUserGroups,
     initGoogleAuth,
     handleGoogleCallback,
+    isGoogleEmailAllowed,
     cleanGoogleSessions,
     findUser,
     verifyPassword,

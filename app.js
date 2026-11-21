@@ -4,16 +4,61 @@ let categoryChartInstance = null;
 let allExpenses = [];
 let isSubmittingExpense = false;
 let historyFilters = { search: '', category: '', payer: '', month: '' };
+let inviteSearchTimer = null;
 let currentUser = null;
 let currentGroupId = null;
 let currentGroupName = null;
+let currentGroupCurrency = 'UYU';
+let currentGroupMembers = [];
 let currentSplitMode = 'equal';
+let editingExpenseId = null;
+let editingSplitMode = 'equal';
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
 
 const initialTheme = localStorage.getItem(themeKey) || defaultTheme;
 document.documentElement.setAttribute('data-bs-theme', initialTheme);
 // Update toggle button after DOM loads
 document.addEventListener('DOMContentLoaded', () => {
     updateThemeToggle(initialTheme);
+
+    // Handlers antes inline (necesario para poder usar CSP sin 'unsafe-inline').
+    document.getElementById('toggle-theme-btn')?.addEventListener('click', toggleTheme);
+    document.getElementById('logout-btn')?.addEventListener('click', logout);
+    document.getElementById('delete-group-menu-btn')?.addEventListener('click', openDeleteGroupModal);
+    document.getElementById('add-expense-btn')?.addEventListener('click', submitExpense);
+    document.getElementById('expense-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitExpense();
+    });
+
+    // Delegación: estas listas se regeneran con innerHTML.
+    document.getElementById('members-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-member-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.memberId);
+        if (btn.dataset.memberAction === 'deactivate') removeMember(id);
+        if (btn.dataset.memberAction === 'reactivate') reactivateMember(id);
+        if (btn.dataset.memberAction === 'cancel-invite') cancelInvitation(id);
+    });
+    document.getElementById('expense-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-expense-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.expenseId);
+        if (btn.dataset.expenseAction === 'delete') deleteExpense(id);
+        if (btn.dataset.expenseAction === 'edit') openEditExpenseModal(id);
+    });
+    document.getElementById('invitations-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-invite-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.inviteId);
+        if (btn.dataset.inviteAction === 'accept') acceptInvitation(id);
+        if (btn.dataset.inviteAction === 'reject') rejectInvitation(id);
+    });
 });
 
 function changeTheme(theme) {
@@ -35,8 +80,34 @@ function updateThemeToggle(theme) {
     btn.title = theme === 'splitwise-dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
 }
 
+function currencyDecimals(code) {
+    return ['UYU', 'ARS', 'CLP', 'COP', 'MXN', 'PEN'].includes(code) ? 0 : 2;
+}
+
 function formatCurrency(value) {
-    return new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 0 }).format(Number(value || 0));
+    const code = currentGroupCurrency || 'UYU';
+    const decimals = currencyDecimals(code);
+    try {
+        return new Intl.NumberFormat('es-UY', {
+            style: 'currency',
+            currency: code,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        }).format(Number(value || 0));
+    } catch {
+        return `${escapeHtml(code)} ${Number(value || 0).toFixed(decimals)}`;
+    }
+}
+
+function currencySymbol() {
+    try {
+        const parts = new Intl.NumberFormat('es-UY', {
+            style: 'currency', currency: currentGroupCurrency || 'UYU'
+        }).formatToParts(0);
+        return parts.find(p => p.type === 'currency')?.value || '$';
+    } catch {
+        return '$';
+    }
 }
 
 function formatDate(dateStr) {
@@ -82,8 +153,13 @@ async function loadAuth() {
         currentUser = { username: data.user, name: data.name || data.user, global_role: data.global_role };
 
         if (data.groups && data.groups.length > 0) {
-            currentGroupId = data.defaultGroup ? data.defaultGroup.id : data.groups[0].id;
-            currentGroupName = data.defaultGroup ? data.defaultGroup.name : data.groups[0].name;
+            // Conservar el grupo activo si sigue disponible (recién creado o
+            // recién aceptado). Si no, volver al default.
+            const kept = data.groups.find(g => g.id == currentGroupId);
+            const chosen = kept || data.defaultGroup || data.groups[0];
+            currentGroupId = chosen.id;
+            currentGroupName = chosen.name;
+            currentGroupCurrency = chosen.base_currency || chosen.currency || 'UYU';
         }
 
         document.getElementById('login-screen').hidden = true;
@@ -91,6 +167,7 @@ async function loadAuth() {
         renderHeader();
         renderGroupSelector();
         loadExpenses();
+        renderInvitations();
     } catch (err) {
         document.getElementById('login-screen').hidden = false;
         document.getElementById('app-screen').hidden = true;
@@ -129,20 +206,29 @@ function renderGroupSelector() {
             const current = data.groups.find(g => g.id == currentGroupId) || data.groups[0];
             currentGroupId = current.id;
             currentGroupName = current.name;
+            currentGroupCurrency = current.base_currency || current.currency || 'UYU';
+            currentGroupMembers = [];
             selector.innerHTML = data.groups.map(g =>
-                `<option value="${g.id}" ${g.id == currentGroupId ? 'selected' : ''}>${g.name}</option>`
+                `<option value="${escapeHtml(g.id)}" ${g.id == currentGroupId ? 'selected' : ''}>${escapeHtml(g.name)}</option>`
             ).join('');
             const groupBadge = document.getElementById('current-group-name');
             if (groupBadge) groupBadge.textContent = currentGroupName;
-            selector.onchange = () => {
+            const handleGroupChange = () => {
                 currentGroupId = parseInt(selector.value);
+                currentGroupMembers = [];
                 const selected = data.groups.find(g => g.id == currentGroupId);
                 currentGroupName = selected ? selected.name : null;
+                currentGroupCurrency = selected?.base_currency || selected?.currency || 'UYU';
                 const groupBadge = document.getElementById('current-group-name');
                 if (groupBadge) groupBadge.textContent = currentGroupName || '';
                 loadExpenses();
                 updateDeleteButton(data.groups);
             };
+            if (selector._groupChangeHandler) {
+                selector.removeEventListener('change', selector._groupChangeHandler);
+            }
+            selector._groupChangeHandler = handleGroupChange;
+            selector.addEventListener('change', handleGroupChange);
             // Show delete button only if admin of current group
             updateDeleteButton(data.groups);
         })
@@ -224,7 +310,6 @@ async function loadExpenses() {
         const data = await apiGet(`/api/groups/${currentGroupId}/expenses`);
         allExpenses = data;
         renderExpenses();
-        renderBalance();
         renderBalances();
         updateChart();
         populateMonthFilter();
@@ -253,7 +338,7 @@ async function renderBalances() {
             return `
                 <div class="balance-row d-flex justify-content-between align-items-center py-3 border-bottom">
                     <div>
-                        <div class="fw-semibold">${b.username}</div>
+                        <div class="fw-semibold">${escapeHtml(b.username)}</div>
                         <div class="small text-muted">Pagó: ${formatCurrency(b.total_paid)} | Gastó: ${formatCurrency(b.total_spent)}</div>
                     </div>
                     <div class="text-end">
@@ -274,57 +359,175 @@ async function renderMembers() {
     try {
         const data = await apiGet(`/api/groups/${currentGroupId}`);
         const members = data.members || [];
+        currentGroupMembers = members;
+        currentGroupCurrency = data.base_currency || currentGroupCurrency;
+        renderPayerOptions();
+        updateSplitDisplay();
         if (members.length === 0) {
             container.innerHTML = '<p class="text-muted">No hay miembros.</p>';
             return;
         }
-        container.innerHTML = members.map(m => `
+        const activeAdmins = members.filter(x => x.member_role === 'admin' && x.status === 'active').length;
+        container.innerHTML = members.map(m => {
+            const status = m.status || 'active';
+            const statusBadge = status === 'pending'
+                ? '<span class="badge bg-warning text-dark ms-2">Invitación pendiente</span>'
+                : (status === 'inactive'
+                    ? '<span class="badge bg-secondary ms-2">Inactivo</span>'
+                    : '');
+            let action = '';
+            if (status === 'pending') {
+                action = `<button class="btn btn-sm btn-outline-secondary" data-member-action="cancel-invite" data-member-id="${escapeHtml(m.user_id)}">Cancelar invitación</button>`;
+            } else if (status === 'inactive') {
+                action = `<button class="btn btn-sm btn-outline-success" data-member-action="reactivate" data-member-id="${escapeHtml(m.user_id)}">Reactivar</button>`;
+            } else if (m.member_role !== 'admin' || activeAdmins > 1) {
+                action = `<button class="btn btn-sm btn-outline-danger" data-member-action="deactivate" data-member-id="${escapeHtml(m.user_id)}">Dar de baja</button>`;
+            }
+            return `
             <div class="member-row d-flex justify-content-between align-items-center py-2 border-bottom">
                 <div>
-                    <span class="fw-semibold">${m.username}</span>
-                    <span class="badge bg-secondary ms-2">${m.member_role}</span>
+                    <span class="fw-semibold">${escapeHtml(m.username)}</span>
+                    <span class="badge bg-secondary ms-2">${m.member_role === 'admin' ? 'Admin' : 'Miembro'}</span>
+                    ${statusBadge}
                 </div>
-                ${m.member_role !== 'admin' || members.filter(x => x.member_role === 'admin').length > 1
-                    ? `<button class="btn btn-sm btn-outline-danger" onclick="removeMember(${m.user_id})">Eliminar</button>`
-                    : ''}
-            </div>`).join('');
+                ${action}
+            </div>`;
+        }).join('');
+        updateDeleteButtonFromMembers(members);
     } catch (err) {
         console.error('[APP] Failed to load members:', err);
         container.innerHTML = '<p class="text-danger">Error al cargar miembros.</p>';
     }
 }
 
+function updateDeleteButtonFromMembers(members) {
+    const btn = document.getElementById('delete-group-menu-btn');
+    if (!btn) return;
+    const mine = (members || []).find(m => m.username === currentUser?.username);
+    btn.hidden = !(mine && mine.member_role === 'admin' && mine.status === 'active');
+}
+
+// ── Invitaciones recibidas ──
+async function renderInvitations() {
+    const container = document.getElementById('invitations-list');
+    const panel = document.getElementById('invitations-panel');
+    const countBadge = document.getElementById('invitations-count');
+    const headerBtn = document.getElementById('invitations-btn');
+    try {
+        const invitations = await apiGet('/api/groups/invitations');
+        if (countBadge) countBadge.textContent = invitations.length;
+        if (headerBtn) headerBtn.hidden = invitations.length === 0;
+        if (!container || !panel) return;
+        panel.hidden = invitations.length === 0;
+        container.innerHTML = invitations.map(i => `
+            <div class="invitation-row d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div>
+                    <div class="fw-semibold">${escapeHtml(i.group_name)}</div>
+                    <div class="small text-muted">Te invitó ${escapeHtml(i.owner_username)}</div>
+                </div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-success" data-invite-action="accept" data-invite-id="${escapeHtml(i.id)}">Aceptar</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-invite-action="reject" data-invite-id="${escapeHtml(i.id)}">Rechazar</button>
+                </div>
+            </div>`).join('');
+    } catch (err) {
+        console.error('[APP] Error cargando invitaciones:', err);
+    }
+}
+
+async function acceptInvitation(id) {
+    try {
+        const pending = await apiGet('/api/groups/invitations');
+        const accepted = pending.find(i => i.id === id);
+        await apiPost(`/api/groups/invitations/${id}/accept`, {});
+        if (accepted) currentGroupId = accepted.group_id;
+        await loadAuth();
+        await renderInvitations();
+        Swal.fire({ icon: 'success', title: 'Invitación aceptada', text: 'Ya podés ver el grupo.' });
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+}
+
+async function rejectInvitation(id) {
+    try {
+        await apiDelete(`/api/groups/invitations/${id}`);
+        await renderInvitations();
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+}
+
+async function cancelInvitation(id) {
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}/members/${id}`);
+        await renderMembers();
+        await renderInvitations();
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+}
+
+async function reactivateMember(id) {
+    try {
+        await apiPost(`/api/groups/${currentGroupId}/members/${id}/reactivate`, {});
+        await renderMembers();
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+}
+
 function openInviteModal() {
     const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
     document.getElementById('invite-username').value = '';
+    document.getElementById('invite-suggestions').innerHTML = '';
     document.getElementById('invite-result').innerHTML = '';
     modal.show();
 }
 
+async function searchUsersForInvite(value) {
+    const list = document.getElementById('invite-suggestions');
+    if (!list) return;
+    const q = value.trim().toLowerCase();
+    if (q.length < 2) { list.innerHTML = ''; return; }
+    try {
+        const users = await apiGet(`/api/users/search?q=${encodeURIComponent(q)}`);
+        list.innerHTML = (users || []).map(u =>
+            `<option value="${escapeHtml(u.username)}">${escapeHtml(u.name || u.username)}</option>`
+        ).join('');
+    } catch (err) {
+        console.error('[APP] Error buscando usuarios:', err);
+        list.innerHTML = '';
+    }
+}
+
 async function confirmInvite() {
-    const username = document.getElementById('invite-username').value.trim();
+    const username = document.getElementById('invite-username').value.trim().toLowerCase();
     const resultEl = document.getElementById('invite-result');
     if (!username) {
         Swal.fire({ icon: 'warning', title: 'Username requerido', text: 'Ingresá un username.' });
         return;
     }
     try {
-        await apiPost(`/api/groups/${currentGroupId}/members`, { username, role: 'member' });
-        resultEl.innerHTML = '<p class="text-success small">✅ Usuario agregado al grupo.</p>';
+        const result = await apiPost(`/api/groups/${currentGroupId}/members`, { username, role: 'member' });
+        resultEl.innerHTML = result.status === 'pending'
+            ? '<p class="text-success small">📨 Invitación enviada. El usuario debe aceptarla desde la pestaña Miembros.</p>'
+            : '<p class="text-success small">✅ Usuario agregado al grupo.</p>';
         document.getElementById('invite-username').value = '';
         await renderMembers();
     } catch (err) {
-        resultEl.innerHTML = `<p class="text-danger small">❌ ${err.message}. El usuario debe registrarse primero.</p>`;
+        resultEl.innerHTML = `<p class="text-danger small">❌ ${escapeHtml(err.message)}. El usuario debe registrarse primero.</p>`;
     }
 }
 
 async function removeMember(userId) {
     const result = await Swal.fire({
-        title: '¿Eliminar este miembro?',
+        title: '¿Dar de baja este miembro?',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Eliminar',
-        cancelButtonText: 'Cancelar'
+        confirmButtonText: 'Dar de baja',
+        cancelButtonText: 'Cancelar',
+        text: 'Su historial y balances se conservan. Podés reactivarlo después.'
     });
     if (!result.isConfirmed) return;
     try {
@@ -338,27 +541,62 @@ async function removeMember(userId) {
 function populateMonthFilter() {
     const monthFilter = document.getElementById('month-filter');
     if (!monthFilter) return;
+    const selected = monthFilter.value;
     const months = [...new Set(allExpenses.map(e => e.date?.substring(0, 7)))].filter(Boolean).sort().reverse();
     monthFilter.innerHTML = '<option value="">Todos los meses</option>' +
-        months.map(m => `<option value="${m}">${m}</option>`).join('');
+        months.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    if (selected && months.includes(selected)) monthFilter.value = selected;
+}
+
+async function ensureGroupMembers() {
+    if (!currentGroupId) return [];
+    if (currentGroupMembers.length > 0) return currentGroupMembers;
+    const group = await apiGet(`/api/groups/${currentGroupId}`);
+    currentGroupMembers = group.members || [];
+    currentGroupCurrency = group.base_currency || currentGroupCurrency;
+    renderPayerOptions();
+    return currentGroupMembers;
+}
+
+function otherMemberUsername() {
+    const other = currentGroupMembers.find(m => m.username !== currentUser?.username);
+    return other ? other.username : null;
+}
+
+// El selector de pagador y su filtro se arman con los miembros reales del
+// grupo. Antes el HTML traía "Tin"/"Noe" escritos, lo cual era falso para
+// cualquier otro usuario.
+function renderPayerOptions() {
+    const options = (currentGroupMembers || []).filter(m => m.status !== 'inactive' && m.status !== 'pending').map(m => {
+        const label = escapeHtml(String(m.name || m.username || 'Miembro').trim());
+        const mine = m.username === currentUser?.username;
+        const suffix = mine ? '' : ` (${escapeHtml(m.username)})`;
+        return `<option value="${escapeHtml(m.username)}">${mine ? 'Vos · ' : ''}${label}${suffix}</option>`;
+    }).join('');
+
+    const payer = document.getElementById('expense-payer');
+    if (payer) {
+        payer.innerHTML = options || '<option value="me">Vos</option>';
+        const mine = (currentGroupMembers || []).find(m => m.username === currentUser?.username && m.status === 'active');
+        if (mine) payer.value = mine.username;
+    }
+
+    const filter = document.getElementById('payer-filter');
+    if (filter) {
+        filter.innerHTML = '<option value="">Todos los pagadores</option>' + options;
+    }
 }
 
 async function addExpense(formData) {
     if (isSubmittingExpense) return;
     isSubmittingExpense = true;
     try {
-        let splits = [];
+        await ensureGroupMembers();
         const amount = parseFloat(formData.amount);
-        const otherUser = currentUser.username === 'tin' ? 'noe' : 'tin';
 
-        if (currentSplitMode === 'equal') {
-            splits = [
-                { user_id: currentUser.username, amount: amount / 2 },
-                { user_id: otherUser, amount: amount / 2 }
-            ];
-        } else if (currentSplitMode === 'solo') {
-            splits = [{ user_id: formData.payer, amount }];
-        } else if (formData.customSplits) {
+        // equal/solo los calcula el servidor con los miembros reales del grupo.
+        let splits = [];
+        if (currentSplitMode === 'custom' && formData.customSplits) {
             splits = JSON.parse(formData.customSplits);
         }
 
@@ -368,7 +606,6 @@ async function addExpense(formData) {
             amount: amount,
             payer: formData.payer,
             category: formData.category,
-            currency: 'UYU',
             split_mode: currentSplitMode,
             splits: splits
         });
@@ -418,68 +655,50 @@ function renderExpenses() {
     });
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="text-center py-5 text-muted"><p>No hay gastos registrados</p></div>';
+        container.innerHTML = allExpenses.length === 0
+            ? '<div class="text-center py-5 text-muted"><p>No hay gastos registrados</p></div>'
+            : '<div class="text-center py-5 text-muted"><p>No hay gastos que coincidan con los filtros</p></div>';
         return;
     }
 
+    const myId = currentGroupMembers.find(m => m.username === currentUser?.username)?.user_id;
     container.innerHTML = filtered.map(expense => {
         const isMe = expense.payer === currentUser.username;
-        const meSplit = expense.splits && expense.splits.length > 0
-            ? expense.splits.find(s => s.user_id === currentUser.username)?.amount || expense.amount / 2
-            : expense.amount / 2;
+        const payerLabel = currentGroupMembers.find(m => m.username === expense.payer)?.username || expense.payer;
+        const mySplit = expense.splits?.find(s =>
+            s.split_username === currentUser?.username ||
+            (myId != null && String(s.user_id) === String(myId))
+        );
+        const meSplit = mySplit ? Number(mySplit.amount) : 0;
 
         return `
             <div class="expense-card mb-2 p-3">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="text-muted small">${expense.category || 'Sin categoría'}</div>
-                        <div>${expense.description || 'Sin descripción'}</div>
+                        <div class="text-muted small">${escapeHtml(expense.category || 'Sin categoría')}</div>
+                        <div>${escapeHtml(expense.description || 'Sin descripción')}</div>
                     </div>
                     <div class="text-end">
                         <div class="fw-bold">${formatCurrency(expense.amount)}</div>
-                        <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="deleteExpense(${expense.id})">Eliminar</button>
+                        <div class="d-flex gap-1 justify-content-end">
+                            <button class="btn btn-sm btn-outline-primary px-2 py-0" data-expense-action="edit" data-expense-id="${escapeHtml(expense.id)}">Editar</button>
+                            <button class="btn btn-sm btn-outline-danger px-2 py-0" data-expense-action="delete" data-expense-id="${escapeHtml(expense.id)}">Eliminar</button>
+                        </div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between small text-muted mt-2">
-                    <span>${formatDate(expense.date)} — ${isMe ? 'Pagaste' : 'Pagó ' + (expense.payer === 'tin' ? 'Tin' : 'Noe')}</span>
+                    <span>${formatDate(expense.date)} — ${isMe ? 'Pagaste' : 'Pagó ' + escapeHtml(payerLabel)}</span>
                     <span>Tu parte: ${formatCurrency(meSplit)}</span>
                 </div>
+                ${expense.splits && expense.splits.length > 0 ? `
+                <details class="split-breakdown mt-2">
+                    <summary class="small">Ver desglose (${expense.splits.length} partes)</summary>
+                    <ul class="small text-muted mb-0 mt-1">
+                        ${expense.splits.map(sp => `<li>${escapeHtml(sp.split_username || sp.user_id)}: ${formatCurrency(sp.amount)}</li>`).join('')}
+                    </ul>
+                </details>` : ''}
             </div>`;
     }).join('');
-}
-
-function renderBalance() {
-    const container = document.getElementById('balance-display');
-    if (!container) return;
-
-    let totalPaid = 0, totalOwed = 0;
-    allExpenses.forEach(expense => {
-        const meSplit = expense.splits && expense.splits.length > 0
-            ? expense.splits.find(s => s.user_id === currentUser.username)?.amount || 0
-            : expense.amount / 2;
-        if (expense.payer === currentUser.username) {
-            totalPaid += expense.amount - meSplit;
-        } else {
-            totalOwed += expense.amount - meSplit;
-        }
-    });
-
-    const balance = totalPaid - totalOwed;
-    container.innerHTML = `
-        <div class="row text-center">
-            <div class="col-4">
-                <div class="balance-label">Pagaste</div>
-                <div class="balance-amount">${formatCurrency(totalPaid)}</div>
-            </div>
-            <div class="col-4">
-                <div class="balance-label">Deben</div>
-                <div class="balance-amount ${balance > 0 ? 'text-success' : 'text-danger'}">${formatCurrency(Math.abs(balance))}</div>
-            </div>
-            <div class="col-4">
-                <div class="balance-label">${balance >= 0 ? 'Te deben' : 'Debes'}</div>
-                <div class="balance-amount ${balance >= 0 ? 'text-success' : 'text-danger'}">${balance >= 0 ? '→' : '←'}</div>
-            </div>
-        </div>`;
 }
 
 // ── Chart ──
@@ -510,26 +729,78 @@ function updateChart() {
 }
 
 // ── Form ──
+// Editor reutilizable de montos exactos para todos los miembros del grupo.
+function memberLabel(m) {
+    const name = String(m.name || m.username || 'Miembro').trim();
+    return m.username === currentUser?.username ? `Vos (${name})` : `${name} (${m.username})`;
+}
+
+function renderCustomSplitInputs(container, members, prefix, values = {}) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="small text-muted mb-1">Montos exactos por miembro (la suma debe igualar el monto)</div>
+        <div class="row g-2">
+            ${(members || []).map(m => `
+                <div class="col-6">
+                    <label class="small" for="${prefix}-${escapeHtml(m.user_id)}">${escapeHtml(memberLabel(m))}</label>
+                    <input type="number" class="form-control custom-split-input" min="0" step="0.01"
+                        id="${prefix}-${escapeHtml(m.user_id)}" data-user-id="${escapeHtml(m.user_id)}"
+                        value="${values[m.user_id] !== undefined ? escapeHtml(values[m.user_id]) : ''}">
+                </div>`).join('')}
+        </div>
+        <div class="small mt-1" id="${prefix}-sum" aria-live="polite"></div>`;
+    container.querySelectorAll('.custom-split-input').forEach(input => {
+        input.addEventListener('input', () => updateSplitSum(container, prefix));
+    });
+    updateSplitSum(container, prefix);
+}
+
+function updateSplitSum(container, prefix) {
+    const sumEl = document.getElementById(`${prefix}-sum`);
+    if (!sumEl) return;
+    const inputs = container?.querySelectorAll('.custom-split-input') || [];
+    const sum = [...inputs].reduce((acc, i) => acc + (parseFloat(i.value) || 0), 0);
+    const amountEl = document.getElementById(prefix === 'edit-custom' ? 'edit-amount' : 'expense-amount');
+    const amount = parseFloat(amountEl?.value || 0);
+    const ok = Math.abs(Math.round(sum * 100) - Math.round(amount * 100)) <= 1;
+    sumEl.className = 'small mt-1 ' + (ok ? 'text-success' : 'text-danger');
+    sumEl.textContent = `Suma de partes: ${formatCurrency(sum)} / ${formatCurrency(amount)}`;
+}
+
+function getCustomSplits(container) {
+    return [...(container?.querySelectorAll('.custom-split-input') || [])].map(input => ({
+        user_id: input.dataset.userId,
+        amount: parseFloat(input.value || 0) || 0
+    }));
+}
+
+function customSplitsValid(container, amount) {
+    const splits = getCustomSplits(container);
+    const sum = splits.reduce((acc, s) => acc + s.amount, 0);
+    return splits.length > 0 && Math.abs(Math.round(sum * 100) - Math.round(Number(amount) * 100)) <= 1;
+}
+
 function updateSplitDisplay() {
     const display = document.getElementById('split-display');
     if (!display) return;
     const amount = parseFloat(document.getElementById('expense-amount')?.value || 0);
+    const count = (currentGroupMembers || []).filter(m => m.status !== 'pending').length || 1;
 
     if (currentSplitMode === 'equal') {
-        display.innerHTML = `<p class="text-muted">División: cada uno paga <strong>${formatCurrency(amount / 2)}</strong></p>`;
+        if (count === 1) {
+            display.innerHTML = `<p class="text-muted">Sos el único miembro: lo pagás todo vos (${formatCurrency(amount)})</p>`;
+        } else {
+            display.innerHTML = `<p class="text-muted">División: cada uno paga <strong>${formatCurrency(amount / count)}</strong> (${count} miembros)</p>`;
+        }
     } else if (currentSplitMode === 'solo') {
-        const payerLabel = document.getElementById('expense-payer')?.value === 'me' ? 'Tú' : 'Tu pareja';
-        display.innerHTML = `<p class="text-muted"><strong>${payerLabel}</strong> paga todo: <strong>${formatCurrency(amount)}</strong></p>`;
+        const payerLabel = document.getElementById('expense-payer')?.selectedOptions[0]?.textContent || 'El pagador';
+        display.innerHTML = `<p class="text-muted"><strong>${escapeHtml(payerLabel)}</strong> paga todo: <strong>${formatCurrency(amount)}</strong></p>`;
     } else {
-        display.innerHTML = `
-            <div class="row">
-                <div class="col-6"><label class="small">Tu parte (UR$)</label><input type="number" id="split-me" class="form-control" placeholder="0" step="100"></div>
-                <div class="col-6"><label class="small">Parte pareja (UR$)</label><input type="number" id="split-partner" class="form-control" placeholder="0" step="100"></div>
-            </div>`;
+        renderCustomSplitInputs(display, currentGroupMembers.filter(m => m.status !== 'pending'), 'add-custom');
     }
 }
 
-function submitExpense() {
+async function submitExpense() {
     const description = document.getElementById('expense-description');
     const amount = document.getElementById('expense-amount');
     const date = document.getElementById('expense-date');
@@ -543,18 +814,115 @@ function submitExpense() {
         amount: amount.value,
         date: date.value,
         category: category.value,
-        payer: payer.value,
-        currency: 'UYU'
+        payer: payer.value
     };
 
     if (currentSplitMode === 'custom') {
-        formData.customSplits = JSON.stringify([
-            { user_id: currentUser.username, amount: parseFloat(document.getElementById('split-me')?.value || 0) },
-            { user_id: currentUser.username === 'tin' ? 'noe' : 'tin', amount: parseFloat(document.getElementById('split-partner')?.value || 0) }
-        ]);
+        await ensureGroupMembers();
+        const container = document.getElementById('split-display');
+        if (!customSplitsValid(container, formData.amount)) {
+            Swal.fire({ icon: 'warning', title: 'Reparto incompleto', text: 'La suma de las partes debe igualar el monto del gasto.' });
+            return;
+        }
+        formData.customSplits = JSON.stringify(getCustomSplits(container).filter(x => x.amount > 0));
     }
 
     addExpense(formData);
+}
+
+// ── Edición de gastos ──
+async function openEditExpenseModal(expenseId) {
+    const expense = allExpenses.find(e => e.id === expenseId);
+    if (!expense) return;
+    try { await ensureGroupMembers(); } catch (e) { console.error(e); }
+    editingExpenseId = expenseId;
+    editingSplitMode = expense.split_mode || 'equal';
+    document.getElementById('edit-date').value = expense.date || '';
+    document.getElementById('edit-description').value = expense.description || '';
+    document.getElementById('edit-amount').value = expense.amount || '';
+    document.getElementById('edit-category').value = expense.category || 'Otros';
+    renderPayerOptionsFor('edit-payer');
+    document.getElementById('edit-payer').value = expense.payer || '';
+    document.querySelectorAll('input[name="edit_split_mode"]').forEach(radio => {
+        radio.checked = radio.value === editingSplitMode;
+    });
+    const modal = new bootstrap.Modal(document.getElementById('editExpenseModal'));
+    modal.show();
+    updateEditSplitDisplay(expense.splits || []);
+}
+
+function renderPayerOptionsFor(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = (currentGroupMembers || []).map(m => {
+        const label = escapeHtml(String(m.name || m.username || 'Miembro').trim());
+        const suffix = m.username === currentUser?.username ? '' : ` (${escapeHtml(m.username)})`;
+        return `<option value="${escapeHtml(m.username)}">${m.username === currentUser?.username ? 'Vos · ' : ''}${label}${suffix}</option>`;
+    }).join('') || '<option value="me">Vos</option>';
+}
+
+async function updateEditSplitDisplay(existingSplits = []) {
+    const display = document.getElementById('edit-split-display');
+    if (!display) return;
+    const amount = parseFloat(document.getElementById('edit-amount')?.value || 0);
+    if (editingSplitMode === 'equal') {
+        const count = (currentGroupMembers || []).filter(m => m.status !== 'pending').length || 1;
+        display.innerHTML = `<p class="text-muted">Cada uno paga <strong>${formatCurrency(amount / count)}</strong> (${count} miembros)</p>`;
+    } else if (editingSplitMode === 'solo') {
+        display.innerHTML = '<p class="text-muted">El pagador cubre el monto completo.</p>';
+    } else {
+        if (currentGroupMembers.length === 0) {
+            await ensureGroupMembers();
+        }
+        renderPayerOptionsFor('edit-payer');
+        const values = {};
+        (existingSplits || []).forEach(sp => {
+            const m = (currentGroupMembers || []).find(x =>
+                String(x.user_id) === String(sp.user_id) || x.username === sp.split_username);
+            if (m) values[m.user_id] = sp.amount;
+        });
+        renderCustomSplitInputs(display, currentGroupMembers.filter(m => m.status !== 'pending'), 'edit-custom', values);
+        if (Object.keys(values).length === 0) {
+            // Gasto guardado con miembros hoy inactivos: se muestran igual.
+            const extra = (existingSplits || []).filter(sp => !currentGroupMembers.some(m =>
+                String(m.user_id) === String(sp.user_id) || m.username === sp.split_username));
+            if (extra.length) {
+                display.insertAdjacentHTML('beforeend', '<p class="small text-muted mt-1">Algunas partes originales pertenecen a miembros inactivos; se conservarán al guardar.</p>');
+            }
+        }
+    }
+}
+
+async function submitEditExpense() {
+    if (!editingExpenseId) return;
+    const amount = parseFloat(document.getElementById('edit-amount').value);
+    const payload = {
+        date: document.getElementById('edit-date').value,
+        description: document.getElementById('edit-description').value,
+        amount,
+        category: document.getElementById('edit-category').value,
+        payer: document.getElementById('edit-payer').value,
+        split_mode: editingSplitMode,
+        splits: []
+    };
+    if (editingSplitMode === 'custom') {
+        const container = document.getElementById('edit-split-display');
+        if (!customSplitsValid(container, amount)) {
+            Swal.fire({ icon: 'warning', title: 'Reparto incompleto', text: 'La suma de las partes debe igualar el monto del gasto.' });
+            return;
+        }
+        payload.splits = getCustomSplits(container).filter(x => x.amount > 0);
+    }
+    try {
+        await apiPut(`/api/groups/${currentGroupId}/expenses/${editingExpenseId}`, payload);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editExpenseModal'));
+        modal.hide();
+        editingExpenseId = null;
+        await loadExpenses();
+        Swal.fire({ icon: 'success', title: 'Gasto actualizado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
 }
 
 // ── Init ──
@@ -567,8 +935,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const errorEl = document.getElementById('login-error');
+            if (errorEl) errorEl.textContent = '';
             try {
-                await fetch('/api/login', {
+                const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -576,9 +946,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         password: document.getElementById('login-password').value
                     })
                 });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (errorEl) errorEl.textContent = data.error || 'No se pudo iniciar sesión';
+                    return;
+                }
                 window.location.reload();
             } catch (err) {
-                document.getElementById('login-error').textContent = err.message;
+                if (errorEl) errorEl.textContent = err.message;
             }
         });
     }
@@ -613,11 +988,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Split mode change
     document.querySelectorAll('input[name="split_mode"]').forEach(radio => {
-        radio.addEventListener('change', () => {
+        radio.addEventListener('change', async () => {
             currentSplitMode = radio.value;
+            if (currentSplitMode === 'custom') {
+                try { await ensureGroupMembers(); } catch (e) { console.error(e); }
+            }
             updateSplitDisplay();
         });
     });
+
+    // La preview se actualiza mientras se completa el formulario
+    document.getElementById('expense-amount')?.addEventListener('input', () => {
+        updateSplitDisplay();
+        if (editingExpenseId) updateEditSplitDisplay();
+    });
+    document.getElementById('expense-payer')?.addEventListener('change', updateSplitDisplay);
+    updateSplitDisplay();
 
     // Filter inputs
     document.getElementById('search-input')?.addEventListener('input', (e) => {
@@ -644,9 +1030,32 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delete-group-menu-btn')?.addEventListener('click', openDeleteGroupModal);
     document.getElementById('confirm-delete-group')?.addEventListener('click', confirmDeleteGroup);
 
+    // Invitaciones recibidas
+    document.getElementById('invitations-btn')?.addEventListener('click', () => {
+        const tabBtn = document.querySelector('#app-tabs button[data-bs-target="#pane-members"]');
+        if (tabBtn) new bootstrap.Tab(tabBtn).show();
+        document.getElementById('invitations-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    // Edición de gasto
+    document.getElementById('confirm-edit-expense')?.addEventListener('click', submitEditExpense);
+    document.querySelectorAll('input[name="edit_split_mode"]').forEach(radio => {
+        radio.addEventListener('change', async () => {
+            editingSplitMode = radio.value;
+            if (editingSplitMode === 'custom') {
+                try { await ensureGroupMembers(); } catch (e) { console.error(e); }
+            }
+            updateEditSplitDisplay();
+        });
+    });
+
     // Invite member button
     document.getElementById('invite-member-btn')?.addEventListener('click', openInviteModal);
     document.getElementById('confirm-invite')?.addEventListener('click', confirmInvite);
+    document.getElementById('invite-username')?.addEventListener('input', (e) => {
+        clearTimeout(inviteSearchTimer);
+        inviteSearchTimer = setTimeout(() => searchUsersForInvite(e.target.value), 250);
+    });
 
     // Profile button
     document.getElementById('profile-btn')?.addEventListener('click', () => {
@@ -720,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target === '#pane-balances') renderBalances();
             if (target === '#pane-stats') updateChart();
             if (target === '#pane-members') renderMembers();
-            if (target === '#pane-expenses') { renderExpenses(); renderBalance(); }
+            if (target === '#pane-expenses') renderExpenses();
         });
     });
 

@@ -1,44 +1,44 @@
 Servidor corriendo en http://localhost:4000
 [DB] Tabla expenses inicializada en Turso
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true
-[LOGIN] Recibido: user="tin" pass="tin123"
+[LOGIN] Recibido: user="tin" pass=[REDACTED 2026-11-20]
 [LOGIN] AUTH_TIN="tin123"
-[AUTH login] username="tin" password="tin123"
-[AUTH login] USERS[username] = { password: 'tin123', payer: 'me' }
-[AUTH login] user.password="tin123"
+[AUTH login] username="tin" password=[REDACTED 2026-11-20]
+[AUTH login] USERS[username] = { password: [REDACTED 2026-11-20] payer: 'me' }
+[AUTH login] user.password=[REDACTED 2026-11-20]
 [AUTH login] match: true

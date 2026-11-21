@@ -7,6 +7,117 @@ const { authMiddleware } = require('./auth');
 router.use(authMiddleware);
 
 // ────────────────────────────────────────
+// Helpers de miembros / pagador / splits
+// ────────────────────────────────────────
+
+// Un código de moneda es exactamente 3 letras. Sin esto, un valor arbitrario
+// llega a Intl.NumberFormat en el front, que lanza y devuelve el código crudo
+// dentro de un innerHTML (vector de XSS).
+function normalizeCurrency(value) {
+    const code = String(value || 'UYU').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+async function getGroupMembers(groupId, statuses = ['active']) {
+    const placeholders = statuses.map(() => '?').join(', ');
+    const result = await db.execute(`
+        SELECT gm.user_id, gm.role, gm.status, u.username, u.name
+        FROM group_members gm
+        JOIN users u ON gm.user_id = u.id
+        WHERE gm.group_id = ? AND gm.status IN (${placeholders})
+        ORDER BY gm.user_id
+    `, [groupId, ...statuses]);
+    return result.rows;
+}
+
+// Acepta el id entero del miembro o su username (compatibilidad con datos viejos)
+function resolveMemberId(value, members) {
+    if (value === undefined || value === null || value === '') return null;
+    const byId = members.find(m => String(m.user_id) === String(value));
+    if (byId) return Number(byId.user_id);
+    const byName = members.find(m => m.username === value);
+    return byName ? Number(byName.user_id) : null;
+}
+
+// 'me' -> usuario actual; 'partner' -> el otro miembro real del grupo;
+// cualquier otro valor debe ser un miembro del grupo.
+function resolvePayerUsername(value, members, currentUsername) {
+    if (value === 'me' || value === undefined || value === null || value === '') return currentUsername;
+    if (value === 'partner') {
+        const other = members.find(m => m.username !== currentUsername);
+        return other ? other.username : null;
+    }
+    const match = members.find(m => m.username === value || String(m.user_id) === String(value));
+    return match ? match.username : null;
+}
+
+// Parte equitativa en centavos: el resto se reparte para que la suma sea exacta.
+function evenSplits(totalAmount, members) {
+    const cents = Math.round(Number(totalAmount) * 100);
+    const base = Math.floor(cents / members.length);
+    let remainder = cents - base * members.length;
+    return members.map(m => ({
+        user_id: Number(m.user_id),
+        amount: (base + (remainder-- > 0 ? 1 : 0)) / 100
+    }));
+}
+
+// ────────────────────────────────────────
+// Invitaciones pendientes del usuario actual
+// Se registran antes de /:id para que Express no las trate como un ID.
+// ────────────────────────────────────────
+router.get('/invitations', async (req, res) => {
+    try {
+        const result = await db.execute(`
+            SELECT gm.id, gm.group_id, gm.role, g.name AS group_name, u.username AS owner_username
+            FROM group_members gm
+            JOIN groups g ON g.id = gm.group_id
+            JOIN users u ON u.id = g.owner_id
+            WHERE gm.user_id = ? AND gm.status = 'pending'
+            ORDER BY g.name
+        `, [req.user.userId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[GROUPS] Error listando invitaciones:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// POST /invitations/:id/accept — aceptar invitación
+router.post('/invitations/:id/accept', async (req, res) => {
+    try {
+        const result = await db.execute(
+            "UPDATE group_members SET status = 'active', joined_at = strftime('%s', 'now') WHERE id = ? AND user_id = ? AND status = 'pending'",
+            [req.params.id, req.user.userId]
+        );
+        if (!result.rowsAffected) {
+            return res.status(404).json({ error: 'Invitación no encontrada' });
+        }
+        res.json({ message: 'Invitación aceptada' });
+    } catch (err) {
+        console.error('[GROUPS] Error aceptando invitación:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// DELETE /invitations/:id — rechazar invitación (el invitado)
+router.delete('/invitations/:id', async (req, res) => {
+    try {
+        const result = await db.execute(
+            "DELETE FROM group_members WHERE id = ? AND user_id = ? AND status = 'pending'",
+            [req.params.id, req.user.userId]
+        );
+        if (!result.rowsAffected) {
+            return res.status(404).json({ error: 'Invitación no encontrada' });
+        }
+        res.json({ message: 'Invitación rechazada' });
+    } catch (err) {
+        console.error('[GROUPS] Error rechazando invitación:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
 // GET / — listar grupos del usuario
 // ────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -16,7 +127,7 @@ router.get('/', async (req, res) => {
             SELECT g.*, gm.role as member_role
             FROM groups g
             JOIN group_members gm ON g.id = gm.group_id
-            WHERE gm.user_id = ?
+            WHERE gm.user_id = ? AND gm.status = 'active'
             ORDER BY g.name ASC
         `, [userId]);
 
@@ -33,8 +144,11 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const { name, base_currency } = req.body;
     const cleanName = name ? name.trim() : '';
-    const currency = (base_currency || 'UYU').toUpperCase();
+    const currency = normalizeCurrency(base_currency);
 
+    if (!currency) {
+        return res.status(400).json({ error: 'Código de moneda inválido (3 letras)' });
+    }
     if (!cleanName || cleanName.length < 1) {
         return res.status(400).json({ error: 'El nombre del grupo es requerido' });
     }
@@ -77,10 +191,10 @@ router.get('/:id', async (req, res) => {
         const { userId } = req.user;
 
         const memberCheck = await db.execute(`
-            SELECT role FROM group_members WHERE group_id = ? AND user_id = ?
+            SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?
         `, [groupId, userId]);
 
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
 
@@ -96,11 +210,11 @@ router.get('/:id', async (req, res) => {
         }
 
         const membersResult = await db.execute(`
-            SELECT gm.user_id, gm.role as member_role, u.username
+            SELECT gm.user_id, gm.role as member_role, gm.status, u.username, u.name
             FROM group_members gm
             JOIN users u ON gm.user_id = u.id
             WHERE gm.group_id = ?
-            ORDER BY gm.role ASC, u.username ASC
+            ORDER BY CASE gm.status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, gm.role ASC, u.username ASC
         `, [groupId]);
 
         const group = groupResult.rows[0];
@@ -129,17 +243,20 @@ router.put('/:id', async (req, res) => {
         const groupId = req.params.id;
 
         const memberCheck = await db.execute(`
-            SELECT role FROM group_members WHERE group_id = ? AND user_id = ?
+            SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?
         `, [groupId, userId]);
 
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
         if (memberCheck.rows[0].role !== 'admin') {
             return res.status(403).json({ error: 'Solo el owner puede editar el grupo' });
         }
 
-        const currency = base_currency ? base_currency.toUpperCase() : 'UYU';
+        const currency = normalizeCurrency(base_currency);
+        if (!currency) {
+            return res.status(400).json({ error: 'Código de moneda inválido (3 letras)' });
+        }
         await db.execute(
             'UPDATE groups SET name = ?, base_currency = ? WHERE id = ?',
             [cleanName, currency, groupId]
@@ -162,10 +279,10 @@ router.delete('/:id', async (req, res) => {
         const groupId = req.params.id;
 
         const memberCheck = await db.execute(`
-            SELECT role FROM group_members WHERE group_id = ? AND user_id = ?
+            SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?
         `, [groupId, userId]);
 
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
         if (memberCheck.rows[0].role !== 'admin') {
@@ -185,10 +302,10 @@ router.delete('/:id', async (req, res) => {
 // POST /:id/members — agregar miembro
 // ────────────────────────────────────────
 router.post('/:id/members', async (req, res) => {
-    const { username, role } = req.body;
-    const cleanRole = role || 'member';
+    const cleanRole = req.body.role || 'member';
+    const cleanUsername = String(req.body.username || '').trim().toLowerCase();
 
-    if (!username || !['admin', 'member'].includes(cleanRole)) {
+    if (!cleanUsername || !['admin', 'member'].includes(cleanRole)) {
         return res.status(400).json({ error: 'Se requiere username y role válido (admin/member)' });
     }
 
@@ -197,33 +314,53 @@ router.post('/:id/members', async (req, res) => {
         const groupId = req.params.id;
 
         const memberCheck = await db.execute(`
-            SELECT role FROM group_members WHERE group_id = ? AND user_id = ?
+            SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?
         `, [groupId, userId]);
 
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
         if (memberCheck.rows[0].role !== 'admin') {
             return res.status(403).json({ error: 'Solo los admins pueden agregar miembros' });
         }
 
-        const userResult = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+        const userResult = await db.execute('SELECT * FROM users WHERE LOWER(username) = ?', [cleanUsername]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
         const targetUserId = userResult.rows[0].id;
-        if (targetUserId === userId) {
+        if (Number(targetUserId) === Number(userId)) {
             return res.status(400).json({ error: 'No puedes agregarte a ti mismo' });
         }
 
-        await db.execute({
-            sql: 'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
-            args: [groupId, targetUserId, cleanRole]
-        });
-
-        console.log(`[GROUPS] Miembro "${username}" agregado al grupo (ID: ${groupId})`);
-        res.json({ message: 'Miembro agregado con éxito', username, role: cleanRole });
+        const invitedUsername = userResult.rows[0].username;
+        const existing = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, targetUserId]
+        );
+        if (existing.rows.length > 0 && existing.rows[0].status === 'active') {
+            return res.status(400).json({ error: 'Ese usuario ya es miembro del grupo' });
+        }
+        if (existing.rows.length > 0 && existing.rows[0].status === 'pending') {
+            return res.status(400).json({ error: 'La invitación ya está pendiente' });
+        }
+        let message;
+        if (existing.rows.length > 0) {
+            await db.execute(
+                "UPDATE group_members SET status = 'active', role = ?, joined_at = strftime('%s', 'now') WHERE group_id = ? AND user_id = ?",
+                [cleanRole, groupId, targetUserId]
+            );
+            message = 'Miembro reactivado con éxito';
+        } else {
+            await db.execute({
+                sql: "INSERT INTO group_members (group_id, user_id, role, status) VALUES (?, ?, ?, 'pending')",
+                args: [groupId, targetUserId, cleanRole]
+            });
+            message = 'Invitación enviada: espera a que el usuario la acepte';
+        }
+        console.log(`[GROUPS] ${message} :: ${invitedUsername} -> grupo ${groupId}`);
+        res.json({ message, username: invitedUsername, role: cleanRole, status: existing.rows.length > 0 ? 'active' : 'pending' });
     } catch (err) {
         console.error('[GROUPS] Error agregando miembro:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
@@ -240,29 +377,86 @@ router.delete('/:id/members/:userId', async (req, res) => {
         const targetUserId = req.params.userId;
 
         const memberCheck = await db.execute(`
-            SELECT role FROM group_members WHERE group_id = ? AND user_id = ?
+            SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?
         `, [groupId, userId]);
 
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
         if (memberCheck.rows[0].role !== 'admin') {
             return res.status(403).json({ error: 'Solo los admins pueden remover miembros' });
         }
 
-        if (targetUserId === userId) {
+        // req.params es string, req.user.userId es number: con === el guard
+        // daba siempre false y un admin podía removerse a sí mismo.
+        if (Number(targetUserId) === Number(userId)) {
             return res.status(400).json({ error: 'Para salir, elimina el grupo completo' });
         }
 
+        const target = await db.execute(
+            'SELECT id, role, status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, targetUserId]
+        );
+        if (target.rows.length === 0) {
+            return res.status(404).json({ error: 'Ese usuario no pertenece al grupo' });
+        }
+        if (target.rows[0].status === 'pending') {
+            await db.execute('DELETE FROM group_members WHERE id = ?', [target.rows[0].id]);
+            return res.json({ message: 'Invitación cancelada' });
+        }
+        if (target.rows[0].role === 'admin') {
+            const admins = await db.execute(
+                "SELECT COUNT(*) AS count FROM group_members WHERE group_id = ? AND role = 'admin' AND status = 'active'",
+                [groupId]
+            );
+            if (Number(admins.rows[0].count) <= 1) {
+                return res.status(400).json({ error: 'El grupo debe tener al menos un administrador' });
+            }
+        }
+
+        if (target.rows[0].status === 'inactive') {
+            return res.status(400).json({ error: 'El miembro ya está inactivo' });
+        }
         await db.execute(
-            'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
+            "UPDATE group_members SET status = 'inactive' WHERE group_id = ? AND user_id = ?",
             [groupId, targetUserId]
         );
 
-        console.log(`[GROUPS] Miembro (ID: ${targetUserId}) removido del grupo (ID: ${groupId})`);
-        res.json({ message: 'Miembro removido con éxito' });
+        console.log(`[GROUPS] Miembro (ID: ${targetUserId}) marcado inactivo en grupo ${groupId}`);
+        res.json({ message: 'Miembro marcado como inactivo; su historial se conserva' });
     } catch (err) {
         console.error('[GROUPS] Error removiendo miembro:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// POST /:id/members/:userId/reactivate — volver a activar
+// ────────────────────────────────────────
+router.post('/:id/members/:userId/reactivate', async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const groupId = req.params.id;
+        const memberCheck = await db.execute(
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+        if (memberCheck.rows[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Solo los admins pueden reactivar miembros' });
+        }
+        const result = await db.execute(
+            "UPDATE group_members SET status = 'active' WHERE group_id = ? AND user_id = ? AND status = 'inactive'",
+            [groupId, req.params.userId]
+        );
+        if (!result.rowsAffected) {
+            return res.status(404).json({ error: 'Miembro inactivo no encontrado' });
+        }
+        res.json({ message: 'Miembro reactivado' });
+    } catch (err) {
+        console.error('[GROUPS] Error reactivando miembro:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
@@ -276,10 +470,10 @@ router.get('/:id/expenses', async (req, res) => {
         const { userId } = req.user;
 
         const memberCheck = await db.execute(
-            'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
             [groupId, userId]
         );
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
 
@@ -302,7 +496,7 @@ router.get('/:id/expenses', async (req, res) => {
             const splitsResult = await db.execute(`
                 SELECT gs.*, u3.username as split_username
                 FROM group_splits gs
-                LEFT JOIN users u3 ON gs.user_id = u3.username
+                LEFT JOIN users u3 ON (gs.user_id = CAST(u3.id AS TEXT) OR gs.user_id = u3.username)
                 WHERE gs.expense_id IN (${placeholders})
                 ORDER BY gs.expense_id
             `, ids);
@@ -327,65 +521,187 @@ router.post('/:id/expenses', async (req, res) => {
     try {
         const groupId = req.params.id;
         const { userId, username } = req.user;
-        const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
+        const { date, description, amount, payer, category, split_mode, splits } = req.body;
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+        const parsedAmount = Number(amount);
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
         }
         if (!date) {
             return res.status(400).json({ error: 'La fecha es requerida' });
         }
 
         const memberCheck = await db.execute(
-            'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
             [groupId, userId]
         );
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const members = await getGroupMembers(groupId);
+        if (members.length === 0) {
+            return res.status(400).json({ error: 'El grupo no tiene miembros' });
         }
 
         const groupInfo = await db.execute(
             'SELECT base_currency FROM groups WHERE id = ?', [groupId]
         );
-        const currencyCode = currency || groupInfo.rows[0].base_currency || 'UYU';
+        // Moneda única por grupo: se ignora cualquier moneda enviada por el front.
+        const currencyCode = groupInfo.rows[0]?.base_currency || 'UYU';
 
-        const payerCheck = await db.execute(
-            'SELECT u.id FROM group_members gm JOIN users u ON gm.user_id = u.id WHERE gm.group_id = ? AND u.username = ?',
-            [groupId, payer]
-        );
-        const validPayer = payerCheck.rows.length > 0 ? payer : username;
+        const payerUsername = resolvePayerUsername(payer, members, username);
+        if (!payerUsername) {
+            return res.status(400).json({ error: 'El pagador debe ser un miembro del grupo' });
+        }
 
-        const result = await db.execute({
-            sql: 'INSERT INTO group_expenses (group_id, date, description, amount, payer, category, currency, split_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            args: [groupId, date, description || '', Number(amount), validPayer, category || '', currencyCode, split_mode || 'equal']
-        });
+        const mode = split_mode || 'equal';
+        if (!['equal', 'solo', 'custom'].includes(mode)) {
+            return res.status(400).json({ error: 'Modo de división inválido' });
+        }
 
-        const expenseId = result.lastInsertRowid;
-        if (splits && Array.isArray(splits)) {
-            for (const split of splits) {
-                await db.execute({
-                    sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
-                    args: [expenseId, split.user_id, Number(split.amount) || 0]
-                });
-            }
+        // Los splits equitativos y "solo yo" se calculan en servidor: el front
+        // no puede inventar miembros ni dejar la mitad del gasto sin asignar.
+        let splitRows;
+        if (mode === 'equal') {
+            splitRows = evenSplits(parsedAmount, members);
+        } else if (mode === 'solo') {
+            splitRows = [{ user_id: resolveMemberId(payerUsername, members), amount: parsedAmount }];
         } else {
-            const memberCheck2 = await db.execute(
-                'SELECT user_id FROM group_members WHERE group_id = ?', [groupId]
-            );
-            const members = memberCheck2.rows;
-            const splitAmount = Number(amount) / members.length;
-            for (const m of members) {
-                await db.execute({
-                    sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
-                    args: [expenseId, m.user_id, splitAmount]
-                });
+            if (!Array.isArray(splits) || splits.length === 0) {
+                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+            }
+            splitRows = splits.map(s => ({
+                user_id: resolveMemberId(s.user_id, members),
+                amount: Number(s.amount)
+            }));
+            if (splitRows.some(s => s.user_id === null || !Number.isFinite(s.amount) || s.amount < 0)) {
+                return res.status(400).json({ error: 'Splits inválidos: usá miembros del grupo y montos válidos' });
+            }
+            const totalCents = Math.round(parsedAmount * 100);
+            const splitCents = splitRows.reduce((sum, s) => sum + Math.round(s.amount * 100), 0);
+            if (Math.abs(splitCents - totalCents) > 1) {
+                return res.status(400).json({ error: 'La suma de los splits no coincide con el monto' });
             }
         }
 
-        console.log(`[GROUPS] Gasto creado en grupo ${groupId} por ${validPayer} (monto: ${amount})`);
+        const result = await db.execute({
+            sql: 'INSERT INTO group_expenses (group_id, date, description, amount, payer, category, currency, split_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            args: [groupId, date, description || '', parsedAmount, payerUsername, category || '', currencyCode, mode]
+        });
+
+        const expenseId = result.lastInsertRowid;
+        for (const split of splitRows) {
+            await db.execute({
+                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                args: [expenseId, String(split.user_id), split.amount]
+            });
+        }
+
+        console.log(`[GROUPS] Gasto creado en grupo ${groupId} por ${payerUsername} (monto: ${amount}, ${splitRows.length} splits)`);
         res.json({ id: Number(expenseId), message: 'Gasto creado con éxito' });
     } catch (err) {
         console.error('[GROUPS] Error creando gasto:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// PUT /:id/expenses/:expenseId — editar gasto
+// ────────────────────────────────────────
+router.put('/:id/expenses/:expenseId', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const expenseId = req.params.expenseId;
+        const { userId, username } = req.user;
+        const { date, description, amount, payer, category, split_mode, splits } = req.body;
+
+        const memberCheck = await db.execute(
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const existing = await db.execute(
+            'SELECT id FROM group_expenses WHERE group_id = ? AND id = ?',
+            [groupId, expenseId]
+        );
+        if (existing.rows.length === 0) {
+            return res.status(404).json({ error: 'Gasto no encontrado en este grupo' });
+        }
+
+        const parsedAmount = Number(amount);
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
+        }
+        if (!date) {
+            return res.status(400).json({ error: 'La fecha es requerida' });
+        }
+
+        // Se incluyen inactivos para no perder las partes históricas al editar.
+        const members = await getGroupMembers(groupId, ['active', 'inactive']);
+        if (members.length === 0) {
+            return res.status(400).json({ error: 'El grupo no tiene miembros' });
+        }
+
+        const payerUsername = resolvePayerUsername(payer, members, username);
+        if (!payerUsername) {
+            return res.status(400).json({ error: 'El pagador debe ser un miembro del grupo' });
+        }
+
+        const mode = split_mode || 'equal';
+        if (!['equal', 'solo', 'custom'].includes(mode)) {
+            return res.status(400).json({ error: 'Modo de división inválido' });
+        }
+
+        let splitRows;
+        if (mode === 'equal') {
+            splitRows = evenSplits(parsedAmount, members);
+        } else if (mode === 'solo') {
+            splitRows = [{ user_id: resolveMemberId(payerUsername, members), amount: parsedAmount }];
+        } else {
+            if (!Array.isArray(splits) || splits.length === 0) {
+                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
+            }
+            splitRows = splits.map(s => ({
+                user_id: resolveMemberId(s.user_id, members),
+                amount: Number(s.amount)
+            }));
+            if (splitRows.some(s => s.user_id === null || !Number.isFinite(s.amount) || s.amount < 0)) {
+                return res.status(400).json({ error: 'Splits inválidos: usá miembros del grupo y montos válidos' });
+            }
+            const totalCents = Math.round(parsedAmount * 100);
+            const splitCents = splitRows.reduce((sum, s) => sum + Math.round(s.amount * 100), 0);
+            if (Math.abs(splitCents - totalCents) > 1) {
+                return res.status(400).json({ error: 'La suma de los splits no coincide con el monto' });
+            }
+        }
+
+        const groupInfo = await db.execute(
+            'SELECT base_currency FROM groups WHERE id = ?', [groupId]
+        );
+        const currencyCode = groupInfo.rows[0]?.base_currency || 'UYU';
+
+        await db.execute(
+            'UPDATE group_expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ?, currency = ?, split_mode = ? WHERE group_id = ? AND id = ?',
+            [date, description || '', parsedAmount, payerUsername, category || '', currencyCode, mode, groupId, expenseId]
+        );
+        await db.execute(
+            'DELETE FROM group_splits WHERE expense_id = ?', [expenseId]
+        );
+        for (const split of splitRows) {
+            await db.execute({
+                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
+                args: [expenseId, String(split.user_id), split.amount]
+            });
+        }
+
+        console.log(`[GROUPS] Gasto ${expenseId} actualizado en grupo ${groupId}`);
+        res.json({ id: Number(expenseId), message: 'Gasto actualizado con éxito' });
+    } catch (err) {
+        console.error('[GROUPS] Error editando gasto:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });
@@ -399,19 +715,28 @@ router.delete('/:id/expenses/:expenseId', async (req, res) => {
         const { userId } = req.user;
 
         const memberCheck = await db.execute(
-            'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
             [groupId, userId]
         );
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
 
+        // Borrado físico con limpieza explícita: SQLite no aplica ON DELETE
+        // CASCADE sin PRAGMA foreign_keys = ON, así que no confiamos en él.
         await db.execute(
+            'DELETE FROM group_splits WHERE expense_id IN (SELECT id FROM group_expenses WHERE group_id = ? AND id = ?)',
+            [groupId, req.params.expenseId]
+        );
+        const deleted = await db.execute(
             'DELETE FROM group_expenses WHERE group_id = ? AND id = ?',
             [groupId, req.params.expenseId]
         );
+        if (!deleted.rowsAffected) {
+            return res.status(404).json({ error: 'Gasto no encontrado en este grupo' });
+        }
 
-        console.log(`[GROUPS] Gasto ${req.params.expenseId} eliminado del grupo ${groupId}`);
+        console.log(`[GROUPS] Gasto ${req.params.expenseId} eliminado del grupo ${groupId} (splits limpiados)`);
         res.json({ message: 'Gasto eliminado con éxito' });
     } catch (err) {
         console.error('[GROUPS] Error eliminando gasto:', err);
@@ -428,15 +753,15 @@ router.get('/:id/balance', async (req, res) => {
         const { userId } = req.user;
 
         const memberCheck = await db.execute(
-            'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
             [groupId, userId]
         );
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
         }
 
         const membersResult = await db.execute(
-            'SELECT user_id, username FROM group_members gm JOIN users u ON gm.user_id = u.id WHERE group_id = ? ORDER BY user_id',
+            "SELECT gm.user_id, u.username FROM group_members gm JOIN users u ON gm.user_id = u.id WHERE gm.group_id = ? AND gm.status IN ('active', 'inactive') ORDER BY gm.user_id",
             [groupId]
         );
 
@@ -493,26 +818,36 @@ router.post('/:id/payments', async (req, res) => {
         const { userId, username } = req.user;
         const { from_user, to_user, amount, currency, date, description } = req.body;
 
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+        const parsedAmount = Number(amount);
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
         }
         if (!from_user || !to_user) {
             return res.status(400).json({ error: 'from_user y to_user son requeridos' });
         }
 
         const memberCheck = await db.execute(
-            'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?',
+            'SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?',
             [groupId, userId]
         );
-        if (memberCheck.rows.length === 0) {
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
             return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        // Los participantes deben ser miembros reales; antes se insertaban
+        // usernames arbitrarios en group_payments.
+        const members = await getGroupMembers(groupId);
+        const fromName = resolvePayerUsername(from_user, members, username);
+        const toName = resolvePayerUsername(to_user, members, username);
+        if (!fromName || !toName) {
+            return res.status(400).json({ error: 'Los participantes deben ser miembros del grupo' });
         }
 
         const currencyCode = currency || 'UYU';
 
         await db.execute({
             sql: 'INSERT INTO group_payments (group_id, from_user, to_user, amount, currency, date, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            args: [groupId, from_user, to_user, Number(amount), currencyCode, date || new Date().toISOString().split('T')[0], description || '']
+            args: [groupId, fromName, toName, parsedAmount, currencyCode, date || new Date().toISOString().split('T')[0], description || '']
         });
 
         console.log(`[GROUPS] Pago registrado: ${from_user} -> ${to_user} (${amount}) en grupo ${groupId}`);

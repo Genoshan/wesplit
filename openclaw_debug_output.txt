@@ -18,7 +18,7 @@
     "mode": "local",
     "auth": {
       "mode": "token",
-      "token": "f47d152ad1eb228efe008a940d7f243db696d8023ea06d96"
+[REDACTED 2026-11-20: contenido con apariencia de token]
     },
     "port": 18789,
     "bind": "loopback",

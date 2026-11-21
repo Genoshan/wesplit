@@ -4,6 +4,7 @@
     --bs-body-bg: #f7f8fa;
     --bs-body-color: #2d3436;
     --bs-border-color: #e0e4e8;
+    --border-color: var(--bs-border-color);
     --bs-primary: #ff652f;
     --bs-success: #5bc5a7;
     
@@ -24,6 +25,7 @@
     --bs-body-bg: #f3f5f7;
     --bs-body-color: #1f2933;
     --bs-border-color: #d9e1e8;
+    --border-color: var(--bs-border-color);
     --bs-primary: #1769aa;
     --bs-success: #257a4f;
     
@@ -41,6 +43,7 @@
     --bs-body-bg: #1a1d21;
     --bs-body-color: #e8e9ea;
     --bs-border-color: #2d3139;
+    --border-color: var(--bs-border-color);
     --bs-primary: #ff652f;
     --bs-success: #5bc5a7;
     
@@ -516,7 +519,7 @@ body {
     min-height: 280px;
 }
 
-#categoryChart {
+#category-chart {
     max-width: 400px !important;
     max-height: 280px !important;
 }
@@ -787,7 +790,7 @@ body {
         min-height: 200px;
     }
 
-    #categoryChart {
+    #category-chart {
         max-width: 320px !important;
         max-height: 200px !important;
     }
@@ -856,7 +859,7 @@ body {
         min-height: 180px;
     }
 
-    #categoryChart {
+    #category-chart {
         height: 180px !important;
     }
 
@@ -887,126 +890,6 @@ body {
             text-size-adjust: 100%;
         }
     }
-}
-
-/* Recurring Expenses */
-.recurring-card {
-    margin-top: 24px;
-}
-
-.recurring-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 18px;
-}
-
-.recurring-list {
-    display: grid;
-    gap: 12px;
-}
-
-.recurring-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: background-color 0.2s;
-}
-
-.recurring-item:hover {
-    background: var(--soft-panel);
-}
-
-.recurring-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.recurring-description {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-primary);
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.recurring-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-}
-
-.recurring-freq-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: var(--soft-panel);
-    color: var(--text-secondary);
-    text-transform: uppercase;
-}
-
-.recurring-amount {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--accent-strong);
-    white-space: nowrap;
-}
-
-.recurring-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.btn-recurring-add {
-    padding: 6px 14px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    border-radius: 6px;
-    white-space: nowrap;
-}
-
-.btn-recurring-edit,
-.btn-recurring-delete {
-    padding: 6px 10px;
-    font-size: 0.78rem;
-    border-radius: 6px;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-recurring-edit {
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-}
-
-.btn-recurring-edit:hover {
-    background: var(--soft-panel);
-    color: var(--text-primary);
-}
-
-.btn-recurring-delete {
-    border: 1px solid #dc3545;
-    color: #dc3545;
-}
-
-.btn-recurring-delete:hover {
-    background: #dc3545;
-    color: white;
 }
 
 .app-footer {
@@ -1119,4 +1002,38 @@ body {
 
 .history-actions .btn:last-child {
     margin-bottom: 0;
+}
+
+/* Lote M: invitaciones, desglose y reparto exacto */
+.invitations-panel {
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--soft-panel);
+}
+
+.invitation-row:last-child,
+.member-row:last-child {
+    border-bottom: 0 !important;
+}
+
+.split-breakdown summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.split-breakdown ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.split-breakdown li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+}
+
+.custom-split-input {
+    font-variant-numeric: tabular-nums;
 }

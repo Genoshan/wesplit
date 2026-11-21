@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gastos Compartidos</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -40,7 +40,7 @@
                             <label for="reg-username">Username</label>
                             <input type="text" id="reg-username" class="form-control mb-3" placeholder="Ej. juan" required>
                             <label for="reg-password">Contraseña</label>
-                            <input type="password" id="reg-password" class="form-control mb-3" placeholder="Mínimo 4 caracteres" required>
+                            <input type="password" id="reg-password" class="form-control mb-3" placeholder="Mínimo 12 caracteres" required>
                             <label for="reg-email">Email</label>
                             <input type="email" id="reg-email" class="form-control" placeholder="tu@email.com" required>
                         </div>
@@ -76,16 +76,17 @@
             <div class="header-actions">
                 <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
                 <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
+                <button id="invitations-btn" class="btn btn-sm btn-outline-warning" hidden>Invitaciones <span id="invitations-count" class="badge bg-warning text-dark">0</span></button>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <span id="user-display-name" class="user-label"></span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><button class="dropdown-item" id="profile-btn">⚙️ Mi perfil</button></li>
-                        <li><button class="dropdown-item" onclick="toggleTheme()">🌙/☀️ Cambiar tema</button></li>
+                        <li><button class="dropdown-item" id="toggle-theme-btn">🌙/☀️ Cambiar tema</button></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><button class="dropdown-item text-danger" id="delete-group-menu-btn" hidden onclick="openDeleteGroupModal()">🗑️ Eliminar grupo actual</button></li>
-                        <li><button class="dropdown-item text-danger" onclick="logout()">🚪 Salir</button></li>
+                        <li><button class="dropdown-item text-danger" id="delete-group-menu-btn" hidden>🗑️ Eliminar grupo actual</button></li>
+                        <li><button class="dropdown-item text-danger" id="logout-btn">🚪 Salir</button></li>
                     </ul>
                 </div>
             </div>
@@ -117,13 +118,13 @@
                                 <p class="eyebrow">Nuevo movimiento</p>
                                 <h2 id="form-title">Agregar gasto</h2>
                             </div>
-                            <form id="expense-form" class="form-container" onsubmit="event.preventDefault(); toggleExpenseForm(true);">
+                            <form id="expense-form" class="form-container">
                                 <label for="expense-date">Fecha</label>
                                 <input type="date" id="expense-date" class="form-control" required>
                                 <label for="expense-description">Descripción</label>
                                 <input type="text" id="expense-description" class="form-control" placeholder="Ej. Super" required>
                                 <label for="expense-amount">Monto</label>
-                                <input type="number" id="expense-amount" class="form-control" min="1" step="0.01" required>
+                                <input type="number" id="expense-amount" class="form-control" min="0.01" step="0.01" required>
                                 <label for="expense-category">Categoría</label>
                                 <select id="expense-category" class="form-select" required>
                                     <option value="Alimentación">Alimentación</option>
@@ -134,14 +135,14 @@
                                 </select>
                                 <label for="expense-payer">Pagó</label>
                                 <select id="expense-payer" class="form-select" required>
-                                    <option value="me">Tin</option>
-                                    <option value="partner">Noe</option>
+                                    <!-- Opciones generadas con los miembros reales del grupo (app.js) -->
+                                    <option value="me">Vos</option>
                                 </select>
                                 <label>Split</label>
                                 <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división">
                                     <label class="split-option">
                                         <input type="radio" name="split_mode" value="equal" checked>
-                                        <span class="split-label">50/50</span>
+                                        <span class="split-label">Partes iguales</span>
                                     </label>
                                     <label class="split-option">
                                         <input type="radio" name="split_mode" value="solo">
@@ -153,7 +154,7 @@
                                     </label>
                                 </div>
                                 <div id="split-display"></div>
-                                <button type="button" class="btn btn-primary btn-action w-100" onclick="submitExpense()">Agregar gasto</button>
+                                <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Agregar gasto</button>
                             </form>
                         </div>
                     </section>
@@ -177,13 +178,13 @@
                                 </select>
                                 <select id="payer-filter" class="form-select filter-select" aria-label="Filtrar por pagador">
                                     <option value="">Todos los pagadores</option>
-                                    <option value="me">Tin</option>
-                                    <option value="partner">Noe</option>
+                                    <!-- Opciones generadas con los miembros reales del grupo (app.js) -->
                                 </select>
                                 <select id="month-filter" class="form-select filter-select" aria-label="Filtrar por mes">
                                     <option value="">Todos los meses</option>
                                 </select>
                             </div>
+                            <p class="small text-muted mt-2 mb-0">Los filtros solo afectan al historial. Balances y estadísticas muestran todos los períodos.</p>
                             <div id="expense-list" class="expense-list"></div>
                         </div>
                     </section>
@@ -197,6 +198,7 @@
                         <div class="section-heading">
                             <p class="eyebrow">Estado de cuentas</p>
                             <h2>Balances del grupo</h2>
+                            <p class="small text-muted mb-0">Saldo total del grupo (todos los períodos).</p>
                         </div>
                         <div id="balance-detail" class="balance-detail"></div>
                     </div>
@@ -210,6 +212,7 @@
                         <div class="section-heading">
                             <p class="eyebrow">Análisis</p>
                             <h2>Distribución por categoría</h2>
+                            <p class="small text-muted mb-0">Todos los períodos.</p>
                         </div>
                         <div class="chart-area">
                             <canvas id="category-chart"></canvas>
@@ -225,6 +228,10 @@
                         <div class="section-heading">
                             <p class="eyebrow">Grupo</p>
                             <h2>Miembros</h2>
+                        </div>
+                        <div id="invitations-panel" class="invitations-panel mb-3" hidden>
+                            <p class="eyebrow">Invitaciones recibidas</p>
+                            <div id="invitations-list"></div>
                         </div>
                         <div id="members-list" class="members-list"></div>
                         <div class="mt-3">
@@ -246,13 +253,55 @@
                 </div>
                 <div class="modal-body">
                     <label for="invite-username">Username del usuario</label>
-                    <input type="text" id="invite-username" class="form-control mb-3" placeholder="Ej. juan">
-                    <div id="invite-result" class="mt-2"></div>
-                    <p class="small text-muted mt-2">El usuario debe tener una cuenta registrada. Si no tiene, debe registrarse primero en la pantalla de login.</p>
+                    <input type="text" id="invite-username" class="form-control mb-1" placeholder="Ej. juan" list="invite-suggestions" autocomplete="off" aria-describedby="invite-help">
+                    <datalist id="invite-suggestions"></datalist>
+                    <div id="invite-result" class="mt-2" aria-live="polite"></div>
+                    <p id="invite-help" class="small text-muted mt-2 mb-0">Escribí al menos 2 letras para ver sugerencias. El username debe coincidir exactamente (se ignoran mayúsculas y espacios). El invitado debe aceptar desde la pestaña Miembros. Si no tiene cuenta, debe registrarse primero.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                     <button type="button" class="btn btn-primary btn-sm" id="confirm-invite">Invitar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal editar gasto -->
+    <div class="modal fade" id="editExpenseModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar gasto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-6"><label for="edit-date">Fecha</label><input type="date" id="edit-date" class="form-control" required></div>
+                        <div class="col-6"><label for="edit-amount">Monto</label><input type="number" id="edit-amount" class="form-control" min="0.01" step="0.01" required></div>
+                        <div class="col-12"><label for="edit-description">Descripción</label><input type="text" id="edit-description" class="form-control" required></div>
+                        <div class="col-6">
+                            <label for="edit-category">Categoría</label>
+                            <select id="edit-category" class="form-select">
+                                <option value="Alimentación">Alimentación</option>
+                                <option value="Transporte">Transporte</option>
+                                <option value="Ocio">Ocio</option>
+                                <option value="Servicios">Servicios</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+                        <div class="col-6"><label for="edit-payer">Pagó</label><select id="edit-payer" class="form-select"></select></div>
+                    </div>
+                    <label class="mt-3">Split</label>
+                    <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división al editar">
+                        <label class="split-option"><input type="radio" name="edit_split_mode" value="equal" checked><span class="split-label">Partes iguales</span></label>
+                        <label class="split-option"><input type="radio" name="edit_split_mode" value="solo"><span class="split-label">Solo pagué yo</span></label>
+                        <label class="split-option"><input type="radio" name="edit_split_mode" value="custom"><span class="split-label">Montos exactos</span></label>
+                    </div>
+                    <div id="edit-split-display" class="mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="confirm-edit-expense">Guardar cambios</button>
                 </div>
             </div>
         </div>
@@ -334,9 +383,9 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" crossorigin="anonymous" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js" crossorigin="anonymous" integrity="sha384-nLoOnA/BDh8A/jxqtckg4DumuCGOBYUnNJLZdQz/zfYNp3wcjGSoWTAzgko06G/2"></script>
     <script src="app.js"></script>
 </body>
 </html>

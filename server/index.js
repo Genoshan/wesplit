@@ -9,8 +9,9 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const db = require('./database');
-const { authMiddleware, login, logout, getUser, getUserGroups, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions } = require('./auth');
+const { authMiddleware, login, logout, getUser, getUserGroups, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions, parseCookies } = require('./auth');
 const groupsRouter = require('./groups');
+const { hashPassword, verifyValue, needsRehash } = require('./password');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -26,8 +27,34 @@ app.get('/api/version', (req, res) => {
     res.json({ version: pkg.version, buildTime: new Date().toISOString() });
 });
 
-// Security
-app.use(helmet({ contentSecurityPolicy: false }));
+// Security: CSP activa. Los handlers inline se sacaron de index.html/app.js
+// (ahora son addEventListener) para poder mantener script-src-attr 'none'.
+// upgrade-insecure-requests se desactiva en local porque el server corre por http.
+app.use(helmet({
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+            styleSrc: ["'self'", 'https://cdn.jsdelivr.net', "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:'],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'", 'https://cdn.jsdelivr.net', 'data:'],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+            ...(IS_PRODUCTION ? {} : { upgradeInsecureRequests: null })
+        }
+    }
+}));
+
+// Detrás de un reverse proxy, express-rate-limit necesita saber cuántos
+// proxies hay para no agrupar a todos los usuarios bajo una misma IP.
+// Configurar TRUST_PROXY=1 en producción (dejar unset en local).
+if (process.env.TRUST_PROXY) {
+    app.set('trust proxy', Number(process.env.TRUST_PROXY));
+}
 
 // Rate limiting
 const apiLimiter = rateLimit({
@@ -37,16 +64,36 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
     message: { error: 'Demasiadas peticiones, intentá de nuevo en un minuto' }
 });
+const authActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiados intentos, intentá de nuevo en unos minutos' }
+});
 app.use('/api/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 
 // Middleware
 app.use(bodyParser.json({ limit: '100kb' }));
 
+// Limiter global: antes estaba montado al final de /api, por lo que register,
+// login, groups y google quedaban sin límite. Se aplica una sola vez
+// a todas las rutas /api que se registren a partir de acá.
+app.use('/api', apiLimiter);
+
 // Grupos API
 app.use('/api/groups', groupsRouter);
 
-// Servir archivos estáticos (login incluido)
-app.use(express.static(path.join(__dirname, '..')));
+// Servir únicamente los archivos del front-end. El resto del repo (server/,
+// scripts/, memory/, .env, etc.) nunca debe ser accesible por HTTP.
+const PUBLIC_ASSETS = new Set(['/index.html', '/style.css', '/app.js', '/favicon.ico']);
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path === '/') return next();
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (!PUBLIC_ASSETS.has(req.path)) return res.status(404).end();
+    next();
+});
+app.use(express.static(path.join(__dirname, '..'), { index: false, dotfiles: 'ignore' }));
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
@@ -54,18 +101,19 @@ app.get('/', (req, res) => {
 
 // Auth endpoints (no requieren autenticación)
 // Registro de nuevos usuarios
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authActionLimiter, async (req, res) => {
     const { username, password, email, name } = req.body;
     const cleanUsername = username ? username.trim().toLowerCase() : '';
     const cleanName = name ? String(name).trim() : '';
+    const cleanEmail = email ? String(email).trim().toLowerCase() : '';
 
     if (!cleanUsername || cleanUsername.length < 3) {
         return res.status(400).json({ error: 'El username debe tener al menos 3 caracteres' });
     }
-    if (!password || password.length < 4) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+    if (!password || password.length < 12) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 12 caracteres' });
     }
-    if (!email || !email.includes('@')) {
+    if (!cleanEmail || !cleanEmail.includes('@')) {
         return res.status(400).json({ error: 'El email es obligatorio y debe ser válido' });
     }
 
@@ -75,31 +123,24 @@ app.post('/api/register', async (req, res) => {
             return res.status(409).json({ error: 'El username ya existe' });
         }
         // Verificar unicidad de email
-        const existingEmail = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+        const existingEmail = await db.execute('SELECT id FROM users WHERE LOWER(email) = ?', [cleanEmail]);
         if (existingEmail.rows.length > 0) {
             return res.status(409).json({ error: 'El email ya está en uso' });
         }
 
-        // Hash simple
-        let hash = 0;
-        for (let i = 0; i < password.length; i++) {
-            const ch = password.charCodeAt(i);
-            hash = ((hash << 5) - hash) + ch;
-            hash = hash & hash;
-        }
-        const passwordHash = 'simple:' + Math.abs(hash).toString(16);
+        const passwordHash = await hashPassword(password);
 
         const insertResult = await db.execute({
             sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
-            args: [cleanUsername, passwordHash, 'member', email || null, cleanName || cleanUsername]
+            args: [cleanUsername, passwordHash, 'member', cleanEmail || null, cleanName || cleanUsername]
         });
 
         const userId = insertResult.lastInsertRowid;
 
-        // Auto-crear grupo "Casa"
+        // Auto-crear grupo personal "Mis gastos"
         const groupResult = await db.execute({
             sql: 'INSERT INTO groups (name, owner_id, base_currency) VALUES (?, ?, ?)',
-            args: ['Casa', userId, 'UYU']
+            args: ['Mis gastos', userId, 'UYU']
         });
         const groupId = groupResult.lastInsertRowid;
         await db.execute({
@@ -107,7 +148,7 @@ app.post('/api/register', async (req, res) => {
             args: [groupId, userId, 'admin']
         });
 
-        console.log(`[REGISTER] Usuario creado: ${cleanUsername} (ID: ${userId}), grupo Casa (ID: ${groupId})`);
+        console.log(`[REGISTER] Usuario creado: ${cleanUsername} (ID: ${userId}), grupo Mis gastos (ID: ${groupId})`);
         res.json({ message: 'Usuario creado con éxito', username: cleanUsername });
     } catch (err) {
         console.error('[REGISTER] Error:', err);
@@ -115,8 +156,9 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Actualizar perfil de usuario
-app.put('/api/profile', async (req, res) => {
+// Actualizar perfil de usuario. Verifica current_password, así que comparte
+// el limiter estricto de login/delete para evitar fuerza bruta de la clave.
+app.put('/api/profile', authActionLimiter, async (req, res) => {
     const cookies = {};
     if (req.headers.cookie) {
         req.headers.cookie.split(';').forEach(pair => {
@@ -142,15 +184,14 @@ app.put('/api/profile', async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
         const storedHash = userRow.rows[0].password_hash;
-        let hash = 0;
-        for (let i = 0; i < current_password.length; i++) {
-            const ch = current_password.charCodeAt(i);
-            hash = ((hash << 5) - hash) + ch;
-            hash = hash & hash;
-        }
-        const currentHash = 'simple:' + Math.abs(hash).toString(16);
-        if (storedHash !== currentHash) {
+        if (!(await verifyValue(current_password, storedHash))) {
             return res.status(403).json({ error: 'Contraseña actual incorrecta' });
+        }
+        // Aprovechamos el cambio autenticado para migrar un hash del esquema viejo.
+        if (needsRehash(storedHash)) {
+            await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [
+                await hashPassword(current_password), user.id
+            ]);
         }
     }
 
@@ -163,27 +204,22 @@ app.put('/api/profile', async (req, res) => {
             await db.execute('UPDATE users SET name = ? WHERE id = ?', [cleanName, user.id]);
         }
         if (email !== undefined) {
-            if (!email || !email.includes('@')) {
+            const cleanEmail = String(email).trim().toLowerCase();
+            if (!cleanEmail || !cleanEmail.includes('@')) {
                 return res.status(400).json({ error: 'Email inválido' });
             }
-            // Verificar unicidad de email
-            const existing = await db.execute('SELECT id FROM users WHERE email = ? AND id != ?', [email, user.id]);
+            // Verificar unicidad de email (normalizado)
+            const existing = await db.execute('SELECT id FROM users WHERE LOWER(email) = ? AND id != ?', [cleanEmail, user.id]);
             if (existing.rows.length > 0) {
                 return res.status(409).json({ error: 'El email ya está en uso' });
             }
-            await db.execute('UPDATE users SET email = ? WHERE id = ?', [email, user.id]);
+            await db.execute('UPDATE users SET email = ? WHERE id = ?', [cleanEmail, user.id]);
         }
         if (password) {
-            if (password.length < 4) {
-                return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+            if (password.length < 12) {
+                return res.status(400).json({ error: 'La contraseña debe tener al menos 12 caracteres' });
             }
-            let hash = 0;
-            for (let i = 0; i < password.length; i++) {
-                const ch = password.charCodeAt(i);
-                hash = ((hash << 5) - hash) + ch;
-                hash = hash & hash;
-            }
-            const passwordHash = 'simple:' + Math.abs(hash).toString(16);
+            const passwordHash = await hashPassword(password);
             await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);
         }
         res.json({
@@ -197,7 +233,7 @@ app.put('/api/profile', async (req, res) => {
 });
 
 // Eliminar cuenta de usuario
-app.delete('/api/profile', async (req, res) => {
+app.delete('/api/profile', authActionLimiter, async (req, res) => {
     const cookies = {};
     if (req.headers.cookie) {
         req.headers.cookie.split(';').forEach(pair => {
@@ -222,14 +258,7 @@ app.delete('/api/profile', async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
         const storedHash = userRow.rows[0].password_hash;
-        let hash = 0;
-        for (let i = 0; i < current_password.length; i++) {
-            const ch = current_password.charCodeAt(i);
-            hash = ((hash << 5) - hash) + ch;
-            hash = hash & hash;
-        }
-        const currentHash = 'simple:' + Math.abs(hash).toString(16);
-        if (storedHash !== currentHash) {
+        if (!(await verifyValue(current_password, storedHash))) {
             return res.status(403).json({ error: 'Contraseña incorrecta' });
         }
 
@@ -247,7 +276,11 @@ app.delete('/api/profile', async (req, res) => {
         }
         // 3. Eliminar sesiones
         await db.execute('DELETE FROM sessions WHERE user_id = ?', [user.id]);
-        // 4. Eliminar usuario
+        // 4. Limpiar membresías huérfanas (grupos borrados por otro usuario,
+        //    pendientes o inactivos). SQLite no aplica CASCADE sin PRAGMA
+        //    foreign_keys = ON, así que lo hacemos explícito.
+        await db.execute('DELETE FROM group_members WHERE group_id NOT IN (SELECT id FROM groups)');
+        // 5. Eliminar usuario
         await db.execute('DELETE FROM users WHERE id = ?', [user.id]);
 
         // Limpiar cookie
@@ -275,7 +308,14 @@ app.post('/api/login', async (req, res) => {
         return res.status(400).json({ error: 'Faltan credenciales' });
     }
 
-    const token = await login(username, password);
+    let token;
+    try {
+        token = await login(username, password);
+    } catch (err) {
+        // Un error de DB NO debe caer al fallback legacy ni filtrarse.
+        console.error('[LOGIN] Error verificando credenciales:', err.message);
+        return res.status(503).json({ error: 'Servicio no disponible' });
+    }
     if (!token) {
         console.log(`[LOGIN] FALLO: credenciales inválidas para user="${username}"`);
         return res.status(401).json({ error: 'Credenciales inválidas' });
@@ -316,34 +356,49 @@ app.get('/api/google/config', (req, res) => {
     res.json({ enabled: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) });
 });
 
-app.post('/api/google/init', bodyParser.json(), apiLimiter, async (req, res) => {
+app.post('/api/google/init', bodyParser.json(), async (req, res) => {
     cleanGoogleSessions();
     const clientOrigin = req.body?.origin;
-    const result = await initGoogleAuth(req, clientOrigin);
+    const result = await initGoogleAuth(clientOrigin);
     if (!result) {
         return res.status(500).json({ error: 'Google OAuth no configurado correctamente' });
     }
+    // Nonce ligado al browser. SameSite=Lax es necesario porque el callback
+    // de Google es una navegación GET cross-site (Strict no enviaría la cookie).
+    res.cookie('oauth_state', result.cookieToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 10 * 60 * 1000,
+        secure: IS_PRODUCTION
+    });
     res.json({ redirectUrl: result.authUrl });
 });
 
-app.get('/api/google/callback', apiLimiter, async (req, res) => {
+app.get('/api/google/callback', async (req, res) => {
     const { code, state, error } = req.query;
-    
+    const clearStateCookie = () => res.cookie('oauth_state', '', {
+        httpOnly: true, sameSite: 'lax', path: '/', expires: new Date(0), secure: IS_PRODUCTION
+    });
+
     if (error) {
-        return res.status(400).json({ error: 'Error de autenticacion con Google' });
+        clearStateCookie();
+        return res.status(400).json({ error: 'Error de autenticación con Google' });
     }
-    
     if (!code || !state) {
-        return res.status(400).json({ error: 'Faltan parametros requeridos' });
+        clearStateCookie();
+        return res.status(400).json({ error: 'Faltan parámetros requeridos' });
     }
-    
+
     try {
-        const result = await handleGoogleCallback(code, state);
-        
+        const cookies = parseCookies(req.headers.cookie);
+        const result = await handleGoogleCallback(code, state, cookies['oauth_state']);
+        clearStateCookie();
+
         if (result.error) {
             return res.status(401).json({ error: result.error });
         }
-        
+
         res.cookie('session_token', result.token, {
             httpOnly: true,
             sameSite: 'strict',
@@ -352,12 +407,13 @@ app.get('/api/google/callback', apiLimiter, async (req, res) => {
         });
         res.redirect('/');
     } catch (err) {
-        console.error('[GOOGLE CALLBACK] Error:', err);
+        clearStateCookie();
+        console.error('[GOOGLE CALLBACK] Error:', err.message);
         res.status(500).json({ error: 'Error al completar el login con Google' });
     }
 });
 
-app.post('/api/google/logout', apiLimiter, (req, res) => {
+app.post('/api/google/logout', (req, res) => {
     const cookies = {};
     if (req.headers.cookie) {
         req.headers.cookie.split(';').forEach(pair => {
@@ -374,109 +430,6 @@ app.post('/api/google/logout', apiLimiter, (req, res) => {
         secure: IS_PRODUCTION
     });
     res.json({ message: 'Logout exitoso' });
-});
-
-app.get('/api/recurring', async (req, res) => {
-    try {
-        const result = await db.execute('SELECT * FROM recurring_expenses ORDER BY next_due_date ASC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al obtener gastos recurrentes: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.post('/api/recurring', async (req, res) => {
-    const { description, amount, payer, category, frequency, next_due_date } = req.body;
-    const cleanDescription = description ? description.trim() : '';
-    const parsedAmount = parseFloat(amount);
-
-    if (!cleanDescription || cleanDescription.length === 0) {
-        return res.status(400).json({ error: 'La descripción es requerida' });
-    }
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
-    }
-    if (!['me', 'partner'].includes(payer)) {
-        return res.status(400).json({ error: 'Pagador inválido' });
-    }
-    if (!['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'].includes(category)) {
-        return res.status(400).json({ error: 'Categoría inválida' });
-    }
-    if (!['diario', 'semanal', 'quincenal', 'mensual', 'trimestral', 'anual'].includes(frequency)) {
-        return res.status(400).json({ error: 'Frecuencia inválida' });
-    }
-    if (!next_due_date || !/^\d{4}-\d{2}-\d{2}$/.test(next_due_date)) {
-        return res.status(400).json({ error: 'Fecha inválida' });
-    }
-
-    try {
-        const result = await db.execute({
-            sql: 'INSERT INTO recurring_expenses (description, amount, payer, category, frequency, next_due_date) VALUES (?, ?, ?, ?, ?, ?)',
-            args: [cleanDescription, parsedAmount, payer, category, frequency, next_due_date],
-        });
-        console.log(`[ÉXITO] Recurrente creado: ${cleanDescription} - $${parsedAmount}`);
-        res.json({ id: Number(result.lastInsertRowid), message: 'Gasto recurrente creado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al insertar gasto recurrente: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.delete('/api/recurring/:id', async (req, res) => {
-    try {
-        const result = await db.execute('DELETE FROM recurring_expenses WHERE id = ?', [req.params.id]);
-        if (result.changes === 0) {
-            return res.status(404).json({ error: 'Gasto recurrente no encontrado' });
-        }
-        console.log(`[ÉXITO] Recurrente eliminado: ${req.params.id}`);
-        res.json({ message: 'Gasto recurrente eliminado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al eliminar gasto recurrente: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.put('/api/recurring/:id', async (req, res) => {
-    const { description, amount, payer, category, frequency, next_due_date } = req.body;
-    const cleanDescription = description ? description.trim() : '';
-    const parsedAmount = parseFloat(amount);
-
-    if (!cleanDescription || cleanDescription.length === 0) {
-        return res.status(400).json({ error: 'La descripción es requerida' });
-    }
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ error: 'El monto debe ser un número positivo' });
-    }
-    if (!['me', 'partner'].includes(payer)) {
-        return res.status(400).json({ error: 'Pagador inválido' });
-    }
-    if (!['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'].includes(category)) {
-        return res.status(400).json({ error: 'Categoría inválida' });
-    }
-    if (!['diario', 'semanal', 'quincenal', 'mensual', 'trimestral', 'anual'].includes(frequency)) {
-        return res.status(400).json({ error: 'Frecuencia inválida' });
-    }
-    if (!next_due_date || !/^\d{4}-\d{2}-\d{2}$/.test(next_due_date)) {
-        return res.status(400).json({ error: 'Fecha inválida' });
-    }
-
-    try {
-        const existing = await db.execute('SELECT * FROM recurring_expenses WHERE id = ?', [req.params.id]);
-        if (existing.rows.length === 0) {
-            return res.status(404).json({ error: 'Gasto recurrente no encontrado' });
-        }
-
-        await db.execute(
-            'UPDATE recurring_expenses SET description = ?, amount = ?, payer = ?, category = ?, frequency = ?, next_due_date = ? WHERE id = ?',
-            [cleanDescription, parsedAmount, payer, category, frequency, next_due_date, req.params.id]
-        );
-        console.log(`[ÉXITO] Recurrente actualizado: ${req.params.id} - ${cleanDescription}`);
-        res.json({ message: 'Gasto recurrente actualizado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al actualizar gasto recurrente: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
 });
 
 app.get('/api/auth/check', async (req, res) => {
@@ -499,337 +452,20 @@ app.get('/api/auth/check', async (req, res) => {
     res.json({ user: user.username, name: user.name, global_role: user.global_role, groups, defaultGroup });
 });
 
-// Listado de monedas - público (antes del auth)
-app.get('/api/currencies', async (req, res) => {
+// Sugerencias para el modal de invitación. Requiere sesión y comparte el
+// rate limit global de /api. No filtra por grupo: el admin decide a quién invita.
+app.get('/api/users/search', authMiddleware, async (req, res) => {
+    const q = String(req.query.q || '').trim().toLowerCase();
+    if (q.length < 2) return res.json([]);
     try {
-        const result = await db.execute('SELECT * FROM currencies ORDER BY is_default DESC, code ASC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(`[CURRENCIES] Error: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-// Auth middleware + rate limit para el resto de la API
-app.use('/api', apiLimiter);
-app.use('/api', authMiddleware);
-
-app.post('/api/currencies', async (req, res) => {
-    const { code, name, rate, symbol, is_default } = req.body;
-    if (!code || !name || rate === undefined || !symbol) {
-        return res.status(400).json({ error: 'Faltan campos requeridos (code, name, rate, symbol)' });
-    }
-    try {
-        if (is_default) {
-            await db.execute('UPDATE currencies SET is_default = 0');
-        }
-        const result = await db.execute({
-            sql: 'INSERT INTO currencies (code, name, rate, symbol, is_default) VALUES (?, ?, ?, ?, ?)',
-            args: [code.toUpperCase(), name, parseFloat(rate), symbol, is_default ? 1 : 0]
-        });
-        console.log(`[CURRENCY] Agregada: ${code} (${name})`);
-        res.json({ id: Number(result.lastInsertRowid), message: `Moneda ${code} agregada` });
-    } catch (err) {
-        console.error(`[CURRENCY] Error: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.put('/api/currencies/:code', async (req, res) => {
-    const { name, rate, symbol } = req.body;
-    try {
-        await db.execute(
-            'UPDATE currencies SET name = ?, rate = ?, symbol = ? WHERE code = ?',
-            [name, parseFloat(rate), symbol, req.params.code.toUpperCase()]
+        const result = await db.execute(
+            "SELECT username, name FROM users WHERE LOWER(username) LIKE ? OR LOWER(COALESCE(name, '')) LIKE ? ORDER BY username LIMIT 8",
+            [`${q}%`, `${q}%`]
         );
-        res.json({ message: 'Moneda actualizada' });
+        res.json(result.rows.map(u => ({ username: u.username, name: u.name || u.username })));
     } catch (err) {
-        console.error(`[CURRENCY] Error: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.delete('/api/currencies/:code', async (req, res) => {
-    const code = req.params.code.toUpperCase();
-    try {
-        const check = await db.execute('SELECT * FROM currencies WHERE code = ?', [code]);
-        if (check.rows.length === 0) {
-            return res.status(404).json({ error: 'Moneda no encontrada' });
-        }
-        await db.execute('DELETE FROM currencies WHERE code = ?', [code]);
-        res.json({ message: `Moneda ${code} eliminada` });
-    } catch (err) {
-        console.error(`[CURRENCY] Error: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.get('/api/expenses', async (req, res) => {
-    try {
-        const { username, userId } = req.user;
-
-        // Get user's default group (first group)
-        const groupResult = await db.execute(`
-            SELECT g.id, g.base_currency
-            FROM groups g
-            JOIN group_members gm ON g.id = gm.group_id
-            WHERE gm.user_id = ?
-            ORDER BY g.name ASC
-            LIMIT 1
-        `, [userId]);
-
-        if (groupResult.rows.length === 0) {
-            return res.status(404).json({ error: 'No se encontró grupo para el usuario' });
-        }
-
-        const groupId = groupResult.rows[0].id;
-        const groupCurrency = groupResult.rows[0].base_currency || 'UYU';
-
-        // Get currencies
-        const currenciesResult = await db.execute('SELECT * FROM currencies ORDER BY is_default DESC, code ASC');
-        const currencies = {};
-        let baseCurrency = 'UYU';
-        currenciesResult.rows.forEach(c => {
-            currencies[c.code] = c.rate;
-            if (c.is_default) baseCurrency = c.code;
-        });
-
-        // Get expenses from group
-        const result = await db.execute(`
-            SELECT ge.*, u2.username as payer_username
-            FROM group_expenses ge
-            JOIN users u2 ON ge.payer = u2.username
-            WHERE ge.group_id = ?
-            ORDER BY ge.date DESC, ge.created_at DESC
-        `, [groupId]);
-        const rows = result.rows;
-
-        const expensesWithSplits = await Promise.all(rows.map(async (row) => {
-            const splitsResult = await db.execute('SELECT * FROM group_splits WHERE expense_id = ?', [row.id]);
-            const splits = splitsResult.rows;
-
-            // Map user_id back to 'me'/'partner' for frontend compatibility
-            const meShare = splits.filter(s => s.user_id === username).reduce((sum, s) => sum + s.amount, 0);
-            const partnerShare = splits.filter(s => s.user_id !== username).reduce((sum, s) => sum + s.amount, 0);
-
-            return {
-                ...row,
-                splits,
-                meShare,
-                partnerShare
-            };
-        }));
-
-        const baseRate = currencies[baseCurrency] || 1;
-
-        let totalMe = 0;
-        let totalPartner = 0;
-
-        expensesWithSplits.forEach(expense => {
-            const currencyRate = (currencies[expense.currency] || 1);
-            const amountInBase = expense.amount / currencyRate;
-            const meShareBase = (expense.meShare / currencyRate);
-            const partnerShareBase = (expense.partnerShare / currencyRate);
-
-            if (expense.payer === username) {
-                totalMe += amountInBase - meShareBase;
-            } else {
-                totalPartner += amountInBase - partnerShareBase;
-            }
-        });
-
-        const balance = (totalMe - totalPartner) / baseRate;
-
-        res.json({
-            expenses: expensesWithSplits,
-            summary: {
-                totalMe: ((totalMe / baseRate)).toFixed(2),
-                totalPartner: ((totalPartner / baseRate)).toFixed(2),
-                balance: balance > 0 ? (balance / 2).toFixed(2) : (Math.abs(balance) / 2).toFixed(2),
-                status: balance > 0 ? "Te deben" : "Le debes",
-                baseCurrency,
-                groupId,
-                groupName: groupCurrency ? 'Casa' : null
-            }
-        });
-    } catch (err) {
-        console.error(`[ERROR_QUERY] Fallo al obtener gastos: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.get('/api/expense/:id', async (req, res) => {
-    try {
-        const { userId } = req.user;
-        const groupId = req.query.groupId;
-
-        const result = await db.execute(`
-            SELECT ge.*, u2.username as payer_username
-            FROM group_expenses ge
-            JOIN users u2 ON ge.payer = u2.username
-            WHERE ge.id = ? AND ge.group_id = ?
-        `, [req.params.id, groupId || '0']);
-        if (!result.rows || result.rows.length === 0) {
-            return res.status(404).json({ error: 'Gasto no encontrado' });
-        }
-        const expense = result.rows[0];
-
-        const splitsResult = await db.execute('SELECT * FROM group_splits WHERE expense_id = ?', [req.params.id]);
-        const splits = splitsResult.rows;
-
-        res.json({ ...expense, splits });
-    } catch (err) {
-        console.error(`[ERROR_QUERY] Fallo al obtener gasto: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.post('/api/expense', async (req, res) => {
-    try {
-        const { username, userId } = req.user;
-        const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
-        const cleanDescription = description ? description.trim() : '';
-        const parsedAmount = parseFloat(amount);
-
-        // Resolve payer to actual username
-        const payerMap = { 'me': username, 'partner': username === 'tin' ? 'noe' : 'tin' };
-        const resolvedPayer = payerMap[payer] || payer;
-
-        // Get user's default group
-        const groupResult = await db.execute(`
-            SELECT g.id, g.base_currency
-            FROM groups g
-            JOIN group_members gm ON g.id = gm.group_id
-            WHERE gm.user_id = ?
-            ORDER BY g.name ASC
-            LIMIT 1
-        `, [userId]);
-
-        if (groupResult.rows.length === 0) {
-            return res.status(404).json({ error: 'No se encontró grupo para el usuario' });
-        }
-
-        const groupId = groupResult.rows[0].id;
-        const currencyCode = currency && ['UYU','USD','BRL','EUR','ARS','CLP','MXN','COP','PEN'].includes(currency.toUpperCase())
-            ? currency.toUpperCase() : groupResult.rows[0].base_currency || 'UYU';
-
-        // Validate
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
-            return res.status(400).json({ error: 'El monto debe ser un número positivo' });
-        }
-        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-            return res.status(400).json({ error: 'Fecha inválida' });
-        }
-        if (!['Alimentación','Transporte','Ocio','Servicios','Otros'].includes(category)) {
-            return res.status(400).json({ error: 'Categoría inválida' });
-        }
-        if (cleanDescription.length > 500) {
-            return res.status(400).json({ error: 'Descripción demasiado larga' });
-        }
-        if (!['equal','solo','custom'].includes(split_mode)) {
-            return res.status(400).json({ error: 'Modo de división inválido' });
-        }
-
-        let splitAmounts = [];
-        if (split_mode === 'equal') {
-            splitAmounts = [{ user_id: username, amount: parsedAmount / 2 }];
-        } else if (split_mode === 'solo') {
-            splitAmounts = [{ user_id: resolvedPayer, amount: parsedAmount }];
-        } else if (split_mode === 'custom') {
-            if (!Array.isArray(splits) || splits.length === 0) {
-                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
-            }
-            let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
-            if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-                return res.status(400).json({ error: `La suma de los splits no coincide con el monto` });
-            }
-            splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
-        }
-
-        const result = await db.execute({
-            sql: 'INSERT INTO group_expenses (group_id, date, description, amount, payer, category, currency, split_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            args: [groupId, date, cleanDescription, parsedAmount, resolvedPayer, category, currencyCode, split_mode],
-        });
-        const expenseId = result.lastInsertRowid;
-
-        for (const split of splitAmounts) {
-            await db.execute({
-                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
-                args: [Number(expenseId), split.user_id, split.amount],
-            });
-        }
-
-        console.log(`[ÉXITO] Gasto registrado en grupo ${groupId}: ${cleanDescription} - $${parsedAmount}`);
-        res.json({ id: Number(expenseId), message: 'Gasto registrado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al insertar gasto: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.delete('/api/expense/:id', async (req, res) => {
-    try {
-        const { userId } = req.user;
-        const result = await db.execute('DELETE FROM group_expenses WHERE id = ? AND group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)', [req.params.id, userId]);
-        if (result.changes === 0) {
-            return res.status(404).json({ error: 'Gasto no encontrado' });
-        }
-        console.log(`[ÉXITO] Gasto eliminado: ${req.params.id}`);
-        res.json({ message: 'Gasto eliminado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al eliminar gasto: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
-    }
-});
-
-app.put('/api/expense/:id', async (req, res) => {
-    try {
-        const { username, userId } = req.user;
-        const { date, description, amount, payer, category, currency, split_mode, splits } = req.body;
-        const cleanDescription = description ? description.trim() : '';
-        const parsedAmount = parseFloat(amount);
-
-        const payerMap = { 'me': username, 'partner': username === 'tin' ? 'noe' : 'tin' };
-        const resolvedPayer = payerMap[payer] || payer;
-
-        const result = await db.execute({
-            sql: 'UPDATE group_expenses SET date = ?, description = ?, amount = ?, payer = ?, category = ?, split_mode = ? WHERE id = ? AND group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)',
-            args: [date, cleanDescription, parsedAmount, resolvedPayer, category, split_mode, req.params.id, userId]
-        });
-
-        if (result.changes === 0) {
-            return res.status(404).json({ error: 'Gasto no encontrado' });
-        }
-
-        await db.execute('DELETE FROM group_splits WHERE expense_id = ?', [req.params.id]);
-
-        let splitAmounts = [];
-        if (split_mode === 'equal') {
-            splitAmounts = [{ user_id: username, amount: parsedAmount / 2 }];
-        } else if (split_mode === 'solo') {
-            splitAmounts = [{ user_id: resolvedPayer, amount: parsedAmount }];
-        } else if (split_mode === 'custom') {
-            if (!Array.isArray(splits) || splits.length === 0) {
-                return res.status(400).json({ error: 'Faltan splits para modo personalizado' });
-            }
-            let totalSplit = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
-            if (Math.abs(totalSplit - parsedAmount) > 0.01) {
-                return res.status(400).json({ error: 'La suma de los splits no coincide con el monto' });
-            }
-            splitAmounts = splits.map(s => ({ user_id: s.user_id, amount: parseFloat(s.amount) }));
-        }
-
-        for (const split of splitAmounts) {
-            await db.execute({
-                sql: 'INSERT INTO group_splits (expense_id, user_id, amount) VALUES (?, ?, ?)',
-                args: [req.params.id, split.user_id, split.amount],
-            });
-        }
-
-        res.json({ message: 'Gasto actualizado con éxito' });
-    } catch (err) {
-        console.error(`[ERROR_DB] Fallo al actualizar gasto: ${err}`);
-        res.status(500).json({ error: 'Error interno en la base de datos' });
+        console.error('[USERS] Error buscando usuarios:', err);
+        res.status(500).json({ error: 'Error al buscar usuarios' });
     }
 });
 

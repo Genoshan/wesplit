@@ -1,50 +1,40 @@
 # Roadmap Consolidado (Reloj & Local AI Lab)
 
-## 🕒 Proyecto Reloj - Gestión de Gastos Compartidos
-*Inspirado en funcionalidades clave de Splitwise. Dos usuarios: Tin y Noe. Divisiones 50/50.*
+## 🕒 Proyecto wesplit - Gestión de Gastos Compartidos
+*Inspirado en Splitwise. N miembros por grupo, moneda única por grupo y reparto exacto en centavos.*
 
-### 🟢 Fase 1: Fundamentos y Experiencia de Usuario (Core) ✅ COMPLETA
-- [x] **Categorizar gastos** (Base de datos, Backend y UI) — 5 categorías
-- [x] **Tablas y gráficos** (Visualización de gráficos por categoría y tiempo) — Chart.js doughnut + tabla de historial
-- [x] **Búsqueda de gastos** (Filtro rápido en el historial) — Filtro por texto, categoría, pagador y mes
-- [x] **Cálculo de saldos totales** (Resumen claro en la pantalla principal) — Panel de deuda mutua + métricas del dashboard
-- [x] **CRUD completo** — Editar y eliminar gastos con modal
-- [x] **Autenticación** — Login/logout con sessions en cookies HTTP-only
-- [x] **Temas visuales** — GitHub, Dracula, Nord con `data-bs-theme`
-- [x] **Notificaciones** — SweetAlert2 en todas las acciones de usuario
-- [x] **Sistema de memoria** — `.localcode/` + `memory/` con checkpoint automático
+> **Estado al 2026-11-20:** rama `feature/dynamic-groups`, PR a `main` pendiente de autorización.
+> Este roadmap estaba desactualizado; la sección siguiente refleja el código real.
 
-### 🟡 Fase 2: Autenticación y Seguridad
-- [ ] **Login con Google OAuth**
-- [ ] **Login con contraseña** (actual)
-- [ ] **2FA (autenticación de dos factores)**
-- [ ] **Protección contra fuerza bruta** (actual, ya implementado)
+### 🟢 Fase 1: Fundamentos ✅ COMPLETA
+- [x] Categorías, historial con filtros (texto, categoría, pagador, mes), gráfico por categoría.
+- [x] Balances por miembro con "pagó / gastó / saldo" (todos los períodos).
+- [x] CRUD de gastos: alta, edición con modal y borrado físico con limpieza de splits.
+- [x] Autenticación con usuario/contraseña (bcryptjs, mínimo 12) y Google OAuth.
+- [x] Sesiones en cookie HTTP-only, CSP + SRI, rate limits y guards de acceso.
+- [x] Temas claro/oscuro, SweetAlert2 y `.localcode/` + `memory/`.
 
-### 🟡 Fase 3: Mejoras de UX y Productividad
-- [ ] **Gastos recurrentes** (Suscripciones, alquiler, etc.)
-- [ ] **Gastos compartidos con terceros** (Amigos, familia)
-- [ ] **Exportar datos** (CSV, JSON)
-- [ ] **Búsqueda por fecha/rango**
-- [ ] **Edición en línea** de la tabla de historial
-- [ ] **Drag & drop** para reordenar historial
+### 🟢 Fase 2: Grupos dinámicos y seguridad ✅ COMPLETA
+- [x] Grupos con N miembros; grupo personal "Mis gastos" creado al registrar.
+- [x] Invitación por username con normalización (mayúsculas/espacios) y sugerencias de búsqueda.
+- [x] Aceptación/rechazo de invitaciones desde la pestaña Miembros (sin link con token).
+- [x] Baja lógica de miembros (inactivos conservan historial y balances) y reactivación.
+- [x] Guard de último admin activo; pagadores y splits desde miembros reales.
+- [x] Desglose de splits en el historial y reparto personalizado para N miembros.
+- [x] Endpoints legacy y tablas de recurrentes/tasas eliminados.
 
-### 🟡 Fase 3: Análisis Avanzado
-- [ ] **Gráfico temporal** de gastos por mes/semana
-- [ ] **Comparativa mes a mes**
-- [ ] **Presupuestos por categoría**
-- [ ] **Predicciones de gasto**
-- [ ] **Divisiones desiguales y por %** (requiere refactor de modelo de datos)
+### 🟡 Pendiente / diferido
+- [ ] **Settle up**: registrar pagos y que el balance los descuente (API existe, sin UI).
+- [ ] **Backoffice** para `global_role` y administración de cuentas.
+- [ ] **Exportar datos** (CSV/JSON).
+- [ ] **Gráfico temporal** y comparativa mes a mes.
+- [ ] **2FA** y notificaciones por email.
+- [ ] **Cotización diaria / multimoneda**: descartado por ahora (moneda única por grupo).
+- [ ] **Gastos recurrentes**: descartado y eliminado del código.
 
 ### 🔵 Futuro — No planificado
-- [ ] **Sincronización en la nube**
-- [ ] **Modo sin conexión**
-- [ ] **Conversión de monedas y Multidivisa**
-- [ ] **Escaneo de recibos** (OCR)
-- [ ] **Importar transacciones** (CSV/Excel)
-- [ ] **Desglose de elementos**
-- [ ] **Soporte multi-idioma**
-- [ ] **Integración de métodos de pago**
-- [ ] **Optimización de rendimiento**
+- [ ] Sincronización en la nube, modo sin conexión, OCR de recibos, multi-idioma.
+- [ ] Escaneo/importación de transacciones y presupuestos por categoría.
 
 ---
 
