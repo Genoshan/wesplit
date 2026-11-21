@@ -7,7 +7,7 @@
     <meta name="darkreader-lock">
     <!-- Marcador de versión: no se muestra en la UI, se lee con DevTools o curl. -->
     <meta name="app-version" content="1.0.0">
-    <title>Gastos Compartidos</title>
+    <title>WeSplit — Dividí gastos, no discusiones</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN">
     <link rel="stylesheet" href="style.css">
@@ -16,8 +16,9 @@
     <div id="login-screen" class="login-screen" hidden>
         <div class="login-card">
             <div class="section-heading">
-                <p class="eyebrow">Gastos Compartidos</p>
-                <h1>Iniciar Sesión</h1>
+                <p class="eyebrow">WeSplit</p>
+                <h1>Dividí gastos, no discusiones</h1>
+                <p class="small text-muted mb-0">Cargá el gasto, nosotros calculamos quién debe cuánto.</p>
             </div>
             <form id="login-form">
                 <label for="login-username">Usuario o email</label>
@@ -25,7 +26,7 @@
                 <label for="login-password">Contraseña</label>
                 <input type="password" id="login-password" class="form-control" placeholder="Contraseña" required>
                 <p id="login-error" class="text-danger small" role="status"></p>
-                <button type="submit" class="btn btn-primary btn-action w-100">Ingresar</button>
+                <button type="submit" class="btn btn-primary btn-action w-100">Entrar a mi grupo</button>
             </form>
 
             <div class="login-divider">o</div>
@@ -36,10 +37,11 @@
                 <div class="modal-dialog modal-sm">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">Crear cuenta</h5>
+                            <h5 class="modal-title">Empezá en 30 segundos</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                         </div>
                         <div class="modal-body">
+                            <p class="small text-muted mb-3">Tu grupo "Mis gastos" ya va a estar listo. Sin tarjeta, sin invitaciones previas.</p>
                             <label for="reg-name">Nombre completo</label>
                             <input type="text" id="reg-name" class="form-control mb-3" placeholder="Ej. Juan Pérez" required>
                             <label for="reg-username">Username</label>
@@ -52,14 +54,14 @@
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-primary btn-sm" id="confirm-register">Crear cuenta</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="confirm-register">Crear mi cuenta y empezar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div id="google-login-section" hidden>
-                <div class="login-divider">o continuar con</div>
+                <div class="login-divider">Más rápido, con Google:</div>
                 <button type="button" id="google-login-btn" class="btn btn-google w-100">
                     <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -76,19 +78,20 @@
     <main class="app-shell" id="app-screen" hidden>
         <header class="app-header">
             <div class="header-left">
-                <h1>Gastos Compartidos</h1>
+                <h1>WeSplit</h1>
+                <span class="small text-muted ms-2 d-none d-md-inline">Tus grupos, en un solo lugar.</span>
                 <span id="current-group-name" class="current-group-badge"></span>
             </div>
             <div class="header-actions">
                 <div class="dropdown group-selector-dropdown">
                     <button id="group-selector" class="btn btn-sm btn-outline-secondary dropdown-toggle group-selector-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Seleccionar grupo">
-                        <span id="group-selector-name">Grupos</span>
+                        <span id="group-selector-name">Elegir grupo</span>
                     </button>
                     <ul id="group-selector-menu" class="dropdown-menu group-selector-menu" aria-labelledby="group-selector"></ul>
                 </div>
-                <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
+                <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Nuevo grupo</button>
                 <button id="toggle-theme-btn" class="btn btn-sm btn-outline-secondary theme-toggle-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro">🌙</button>
-                <button id="invitations-btn" class="btn btn-sm btn-outline-warning" hidden>Invitaciones <span id="invitations-count" class="badge bg-warning text-dark">0</span></button>
+                <button id="invitations-btn" class="btn btn-sm btn-outline-warning" hidden><span id="invitations-label">Invitaciones</span> <span id="invitations-count" class="badge bg-warning text-dark">0</span></button>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <span id="user-display-name" class="user-label"></span>
@@ -120,7 +123,7 @@
         </ul>
 
         <div id="no-groups-alert" class="alert alert-info mt-3" role="status" hidden>
-            No tenés grupos activos. Creá uno con el botón <strong>+ Grupo</strong> para empezar a registrar gastos.
+            No tenés grupos activos. Creá uno con <strong>+ Nuevo grupo</strong> para empezar a registrar gastos.
         </div>
 
         <div class="tab-content app-tab-content" id="app-tab-content">
@@ -130,9 +133,9 @@
                     <section class="card app-card" aria-labelledby="form-title">
                         <div class="card-body p-4">
                             <div class="section-heading">
-                                <p class="eyebrow">Nuevo movimiento</p>
-                                <h2 id="form-title">Agregar gasto</h2>
-                                <button type="button" id="toggle-mode-btn" class="btn btn-sm btn-outline-primary">Cambiar a Pago</button>
+                                <p class="eyebrow">Cargá en 10 segundos</p>
+                                <h2 id="form-title">¿Quién pagó y cuánto?</h2>
+                                <button type="button" id="toggle-mode-btn" class="btn btn-sm btn-outline-primary">¿Fue un pago? Cambiar</button>
                             </div>
                             <form id="expense-form" class="form-container">
                                 <label for="expense-date">Fecha</label>
@@ -170,7 +173,7 @@
                                     </label>
                                 </div>
                                 <div id="split-display"></div>
-                                <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Agregar gasto</button>
+                                <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Cargar y dividir</button>
                             </form>
                             <form id="payment-form" class="form-container" style="display:none;">
                                 <label for="payment-amount">Monto</label>
@@ -248,7 +251,7 @@
                                         </tr>
                                     </thead>
                                     <tbody id="payments-body">
-                                        <tr><td colspan="5" class="text-center text-muted py-4">No hay pagos registrados</td></tr>
+                                        <tr><td colspan="5" class="text-center text-muted py-4">Cuando alguien pague, queda anotado acá.</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -262,9 +265,9 @@
                 <section class="card app-card">
                     <div class="card-body p-4">
                         <div class="section-heading">
-                            <p class="eyebrow">Estado de cuentas</p>
-                            <h2>Balances del grupo</h2>
-                            <p class="small text-muted mb-0">Saldo total del grupo (todos los períodos).</p>
+                            <p class="eyebrow">La cuenta limpia</p>
+                            <h2>Quién le debe a quién</h2>
+                            <p class="small text-muted mb-0">Todo lo cargado, todo lo pagado. Actualizado solo.</p>
                         </div>
                         <div id="balance-detail" class="balance-detail"></div>
                     </div>
@@ -276,9 +279,9 @@
                 <section class="card app-card">
                     <div class="card-body p-4">
                         <div class="section-heading">
-                            <p class="eyebrow">Análisis</p>
-                            <h2>Distribución por categoría</h2>
-                            <p class="small text-muted mb-0">Todos los períodos.</p>
+                            <p class="eyebrow">En qué se va la plata</p>
+                            <h2>Tu gasto, en partes</h2>
+                            <p class="small text-muted mb-0">Todo el grupo, todo el tiempo. Sin sorpresas.</p>
                         </div>
                         <div class="chart-area">
                             <canvas id="category-chart"></canvas>
@@ -293,15 +296,15 @@
                     <div class="card-body p-4">
                         <div class="section-heading">
                             <p class="eyebrow">Grupo</p>
-                            <h2>Miembros</h2>
+                            <h2>Tu equipo</h2>
                         </div>
                         <div id="invitations-panel" class="invitations-panel mb-3" hidden>
-                            <p class="eyebrow">Invitaciones recibidas</p>
+                            <p class="eyebrow">Te están esperando</p>
                             <div id="invitations-list"></div>
                         </div>
                         <div id="members-list" class="members-list"></div>
                         <div class="mt-3">
-                            <button class="btn btn-sm btn-primary" id="invite-member-btn">Invitar miembro</button>
+                            <button class="btn btn-sm btn-primary" id="invite-member-btn">+ Invitar a un amigo</button>
                         </div>
                     </div>
                 </section>
@@ -314,15 +317,15 @@
         <div class="modal-dialog modal-sm">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Invitar miembro</h5>
+                    <h5 class="modal-title">Sumá a alguien al grupo</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
-                    <label for="invite-username">Username del usuario</label>
+                    <label for="invite-username">Buscá por usuario o nombre</label>
                     <input type="text" id="invite-username" class="form-control mb-1" placeholder="Ej. juan" list="invite-suggestions" autocomplete="off" aria-describedby="invite-help">
                     <datalist id="invite-suggestions"></datalist>
                     <div id="invite-result" class="mt-2" aria-live="polite"></div>
-                    <p id="invite-help" class="small text-muted mt-2 mb-0">Escribí al menos 2 letras para ver sugerencias. El username debe coincidir exactamente (se ignoran mayúsculas y espacios). El invitado debe aceptar desde la pestaña Miembros. Si no tiene cuenta, debe registrarse primero.</p>
+                    <p id="invite-help" class="small text-muted mt-2 mb-0">Escribí 2 letras y elegí de la lista. Después acepta en Miembros. Si no tiene cuenta, se registra con Google o email.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
@@ -357,7 +360,7 @@
                         </div>
                         <div class="col-6"><label for="edit-payer">Pagó</label><select id="edit-payer" class="form-select"></select></div>
                     </div>
-                    <p class="form-text mt-2 mb-0">Se muestran también miembros inactivos para conservar el historial del gasto.</p>
+                    <p class="form-text mt-2 mb-0">Los miembros que ya no están siguen en el historial, para que la cuenta no se rompa.</p>
                     <label class="mt-3">Split</label>
                     <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división al editar">
                         <label class="split-option"><input type="radio" name="edit_split_mode" value="equal" checked><span class="split-label">Partes iguales</span></label>
@@ -368,7 +371,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="confirm-edit-expense">Guardar cambios</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="confirm-edit-expense">Actualizar cuenta</button>
                 </div>
             </div>
         </div>
@@ -384,7 +387,7 @@
                 </div>
                 <div class="modal-body">
                     <label for="new-group-name">Nombre</label>
-                    <input type="text" id="new-group-name" class="form-control mb-3" placeholder="Ej. Trabajo">
+                    <input type="text" id="new-group-name" class="form-control mb-3" placeholder="Ej. Viaje a Punta, Casa, Trabajo">
                     <label for="new-group-currency">Moneda base</label>
                     <select id="new-group-currency" class="form-select">
                         <option value="UYU">UYU - Peso uruguayo</option>
@@ -393,10 +396,11 @@
                         <option value="ARS">ARS - Peso argentino</option>
                         <option value="BRL">BRL - Real</option>
                     </select>
+                    <p class="small text-muted mt-2 mb-0">Tu grupo "Mis gastos" siempre queda ahí. Este es extra.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="confirm-create-group">Crear</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="confirm-create-group">Crear grupo</button>
                 </div>
             </div>
         </div>
@@ -411,6 +415,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
+                    <p class="small text-muted mb-3">Tu nombre es lo que ven tus amigos en los balances.</p>
                     <label for="profile-name">Nombre</label>
                     <input type="text" id="profile-name" class="form-control mb-3" placeholder="Tu nombre">
                     <label for="profile-current-password">Contraseña actual</label>
@@ -424,7 +429,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary btn-sm" id="confirm-profile">Guardar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="confirm-profile">Guardar cambios</button>
                 </div>
             </div>
         </div>
@@ -440,11 +445,11 @@
                 </div>
                 <div class="modal-body">
                     <p>¿Estás seguro de que querés eliminar el grupo <strong id="delete-group-name"></strong>?</p>
-                    <p class="text-danger small">Esta acción no se puede deshacer. Se eliminarán todos los gastos y datos del grupo.</p>
+                    <p class="text-danger small">Se eliminan todos los gastos, pagos y miembros. No hay vuelta atrás.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-danger btn-sm" id="confirm-delete-group">Eliminar</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="confirm-delete-group">Eliminar grupo</button>
                 </div>
             </div>
         </div>
