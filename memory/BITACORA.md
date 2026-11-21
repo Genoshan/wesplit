@@ -411,3 +411,13 @@ Cada entrada debe seguir este formato:
 - `package.json` → `1.0.0`; `<meta name="app-version" content="1.0.0">` en `index.html` (solo DevTools/curl); `console.info('WeSplit v… · <commit>')` al cargar `app.js`, con `APP_VERSION` como fallback.
 - `/api/version` devolvía `buildTime: new Date()` **por request** (engañoso). Ahora `server/index.js` arma `buildInfo` una vez al arrancar con `version`, `commit` y `branch` de `RENDER_GIT_COMMIT` / `RENDER_GIT_BRANCH` (Render), `preview` de `IS_PULL_REQUEST` y `startedAt` real; `buildTime` queda como alias de `startedAt`.
 - Verificado local: endpoint estable entre llamadas, meta 1.0.0, consola con la línea y `1.0.0` **ausente** del texto visible. Jest 18/18.
+- Despliegue: PR #21 fue mergeado por el usuario a las 15:29:22Z (Render deployó ese estado). El commit del marcador quedó fuera de `main`, así que se abrió PR #22 con `e3fe44b`. PR #22 mergeado (squash) a las 15:50:56Z como `6984902`; Render deployó a las 15:51:17Z. `/api/version` en prod: `version 1.0.0`, `commit 6984902`, `branch main`. El commit mostrado es el de merge en `main`, no `e3fe44b` — es lo esperado.
+
+## [2026-11-21] Paleta de color del tema claro (opción 3)
+
+- El usuario aclaró que cuando pidió "diseño de Splitwise" se refería también a **los colores** de la página de diseños, no solo a la forma. La app tenía la paleta Bootstrap (`#0d6efd` / `#198754`), así que faltaba este paso.
+- Se recuperó la búsqueda `dribbble.com/search/splitwise` en el browser del usuario y se muestrearon los píxeles de los thumbnails para extraer colores reales (sin layout). Se propusieron 3 paletas y el usuario eligió la **3 — Verde Splitwise / navy** (*Splitwise Icon Redesign*, Chethan KVS).
+- Paleta aplicada: fondo `#fefefe`, texto `#24303a`, verde brillante `#27c95c` (acento/primario), verde profundo `#1e5e4e` (ésito/links/outline), verde medio `#268874` (secundario/hover), rojo `#dc3545` para peligro.
+- `style.css`: se actualizan las variables del bloque claro y se agregan overrides acotados a `[data-bs-theme="splitwise"]` para `--bs-btn-*` de `btn-primary`, `btn-outline-primary`, `btn-secondary`, `btn-outline-secondary`, `btn-success` y `btn-outline-success`, porque Bootstrap 5.3 fija los colores de botón en `--bs-btn-*` y no los toma de `--bs-primary`. También foco de inputs y radio con el verde de la paleta.
+- `app.js`: color de la línea de versión en consola pasa de azul a verde profundo (invisible en UI).
+- Verificación con estilos computados: claro usa los hex anteriores en fondos/texto/botones; oscuro idéntico a la línea base (`#1a1d21`, `#e8e9ea`, `#ff652f`, `#5bc5a7`, botón primario `rgb(13,110,253)`). Sin cambios de layout.

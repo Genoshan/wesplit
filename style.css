@@ -1,32 +1,118 @@
-/* Splitwise light — paleta Bootstrap 5 estándar (fondo blanco) */
+/* Splitwise light — paleta verde Splitwise / navy (opción 3 de los diseños) */
 [data-bs-theme="splitwise"],
 :root {
     /* Evita que el auto-dark del navegador oscurezca el tema claro. */
     color-scheme: only light;
-    --bs-body-bg: #ffffff;
-    --bs-body-color: #212529;
+    --bs-body-bg: #fefefe;
+    --bs-body-bg-rgb: 254, 254, 254;
+    --bs-body-color: #24303a;
+    --bs-body-color-rgb: 36, 48, 58;
     --bs-border-color: #dee2e6;
     --border-color: var(--bs-border-color);
-    --bs-primary: #0d6efd;
-    --bs-primary-rgb: 13, 110, 253;
-    --bs-success: #198754;
-    --bs-success-rgb: 25, 135, 84;
+    --bs-primary: #27c95c;
+    --bs-primary-rgb: 39, 201, 92;
+    --bs-success: #1e5e4e;
+    --bs-success-rgb: 30, 94, 78;
     --bs-danger: #dc3545;
     --bs-danger-rgb: 220, 53, 69;
-    --bs-secondary: #6c757d;
-    --bs-secondary-rgb: 108, 117, 125;
-    --bs-secondary-color: rgba(33, 37, 41, 0.75);
+    --bs-secondary: #268874;
+    --bs-secondary-rgb: 38, 136, 116;
+    --bs-secondary-color: rgba(36, 48, 58, 0.75);
+    --bs-emphasis-color: #24303a;
+    --bs-emphasis-color-rgb: 36, 48, 58;
 
-    --card-bg: #ffffff;
-    --text-primary: #212529;
+    --card-bg: #fefefe;
+    --text-primary: #24303a;
     --text-secondary: #6c757d;
-    --accent-color: #0d6efd;
-    --accent-strong: #0b5ed7;
+    --accent-color: #27c95c;
+    --accent-rgb: 39, 201, 92;
+    --accent-strong: #1e5e4e;
+    --accent-secondary: #268874;
     --soft-panel: #f8f9fa;
-    --success-color: #198754;
+    --success-color: #1e5e4e;
     --danger-color: #dc3545;
-    --owed-color: #198754;
+    --owed-color: #1e5e4e;
     --owe-color: #dc3545;
+}
+
+/* Botones del tema claro con la paleta verde/navy del diseño.
+   Bootstrap 5.3 fija los colores de .btn en --bs-btn-*, no en --bs-primary. */
+[data-bs-theme="splitwise"] .btn-primary {
+    --bs-btn-color: #24303a;
+    --bs-btn-bg: #27c95c;
+    --bs-btn-border-color: #27c95c;
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-hover-bg: #1e5e4e;
+    --bs-btn-hover-border-color: #1e5e4e;
+    --bs-btn-focus-shadow-rgb: 39, 201, 92;
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: #1e5e4e;
+    --bs-btn-active-border-color: #1e5e4e;
+    --bs-btn-disabled-color: #24303a;
+    --bs-btn-disabled-bg: #27c95c;
+    --bs-btn-disabled-border-color: #27c95c;
+}
+
+[data-bs-theme="splitwise"] .btn-outline-primary {
+    --bs-btn-color: #1e5e4e;
+    --bs-btn-border-color: #1e5e4e;
+    --bs-btn-hover-color: #24303a;
+    --bs-btn-hover-bg: #27c95c;
+    --bs-btn-hover-border-color: #27c95c;
+    --bs-btn-focus-shadow-rgb: 39, 201, 92;
+    --bs-btn-active-color: #24303a;
+    --bs-btn-active-bg: #27c95c;
+    --bs-btn-active-border-color: #27c95c;
+}
+
+[data-bs-theme="splitwise"] .btn-secondary {
+    --bs-btn-color: #ffffff;
+    --bs-btn-bg: #24303a;
+    --bs-btn-border-color: #24303a;
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-hover-bg: #268874;
+    --bs-btn-hover-border-color: #268874;
+    --bs-btn-focus-shadow-rgb: 36, 48, 58;
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: #268874;
+    --bs-btn-active-border-color: #268874;
+}
+
+[data-bs-theme="splitwise"] .btn-outline-secondary {
+    --bs-btn-color: #24303a;
+    --bs-btn-border-color: #dee2e6;
+    --bs-btn-hover-color: #24303a;
+    --bs-btn-hover-bg: #f1f3f5;
+    --bs-btn-hover-border-color: #dee2e6;
+    --bs-btn-focus-shadow-rgb: 36, 48, 58;
+    --bs-btn-active-color: #24303a;
+    --bs-btn-active-bg: #e9ecef;
+    --bs-btn-active-border-color: #dee2e6;
+}
+
+[data-bs-theme="splitwise"] .btn-success {
+    --bs-btn-color: #ffffff;
+    --bs-btn-bg: #1e5e4e;
+    --bs-btn-border-color: #1e5e4e;
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-hover-bg: #268874;
+    --bs-btn-hover-border-color: #268874;
+    --bs-btn-focus-shadow-rgb: 30, 94, 78;
+    --bs-btn-active-color: #ffffff;
+    --bs-btn-active-bg: #268874;
+    --bs-btn-active-border-color: #268874;
+}
+
+[data-bs-theme="splitwise"] .btn-outline-success {
+    --bs-btn-color: #1e5e4e;
+    --bs-btn-border-color: #1e5e4e;
+    --bs-btn-hover-color: #24303a;
+    --bs-btn-hover-bg: #27c95c;
+    --bs-btn-hover-border-color: #27c95c;
+    --bs-btn-focus-shadow-rgb: 39, 201, 92;
+    --bs-btn-active-color: #24303a;
+    --bs-btn-active-bg: #27c95c;
+    --bs-btn-active-border-color: #27c95c;
 }
 
 /* Splitwise Dark */
@@ -378,13 +464,13 @@ body {
     opacity: 0.72;
 }
 
-/* Tema claro: los botones semánticos conservan el color Bootstrap */
+/* Tema claro: botones semánticos con la paleta verde del diseño */
 [data-bs-theme="splitwise"] .btn-success.btn-action {
     background: var(--bs-success);
 }
 
 [data-bs-theme="splitwise"] .btn-success.btn-action:hover {
-    background: #146c43;
+    background: var(--accent-secondary);
 }
 
 .form-feedback {
@@ -924,6 +1010,10 @@ body {
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 65, 0.25);
 }
 
+[data-bs-theme="splitwise"] .split-option input[type="radio"]:focus + .split-label {
+    box-shadow: 0 0 0 0.25rem rgba(var(--accent-rgb), 0.25);
+}
+
 .custom-split-section {
     margin-top: 12px;
     padding: 12px;
@@ -1062,8 +1152,8 @@ body {
 
 [data-bs-theme="splitwise"] .form-control:focus,
 [data-bs-theme="splitwise"] .form-select:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.18);
 }
 
 [data-bs-theme="splitwise"] .btn {
@@ -1071,7 +1161,7 @@ body {
 }
 
 [data-bs-theme="splitwise"] #history-table th {
-    color: #6c757d;
+    color: var(--bs-secondary-color);
     font-weight: 600;
 }
 

@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-21
-- **Rama**: `ui/theme-button` desde `main` (`76bd19c`). PRs #19 y #20 mergeados; PR #21 abierto.
+- **Rama**: `ui/palette-option-3` desde `main` (`6984902`). PRs #19–#22 mergeados; PR #23 abierto (paleta del tema claro).
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -58,15 +58,16 @@
 - Correcciones de QA (completas): persistencia de grupo (`seg_group`), validación estricta de fecha en gastos, escape de fórmulas en CSV, comodines LIKE escapados, moneda única en pagos, estado sin grupos, aclaración de pagador inactivo y docs actualizados.
 - Tests: 18/18 (`payment.int.test.js` + `expense.int.test.js`). QA review en `docs/QA_REVIEW_2026-11-21.md`.
 - Versión 1.0.0: `package.json`, meta `app-version` en `index.html`, `console.info` en `app.js` y `/api/version` con commit/branch reales de Render (`startedAt` estable; antes `buildTime` era la hora de cada request). Verificar en prod con `/api/version` o DevTools → Console.
+- PR #21 mergeado por el usuario (15:29Z) y PR #22 mergeado (15:50Z, squash → `6984902`). Producción deployada con v1.0.0: `/api/version` = `version 1.0.0`, `commit 6984902`, `branch main`.
+- Paleta 3 del diseño (Verde Splitwise / navy) aplicada solo al tema claro: `#fefefe`, `#24303a`, `#27c95c`, `#1e5e4e`, `#268874`. Bootstrap 5.3 fija los colores de `.btn` en `--bs-btn-*`, por eso se agregaron overrides acotados a `[data-bs-theme="splitwise"]`. Verificado: claro usa la paleta nueva; oscuro idéntico a la línea base (botón primario sigue `rgb(13,110,253)`). Sin cambios de layout.
 
 ## Próximos pasos
 
-1. PRs #19 y #20 ya mergeados en `main`.
-2. Mergear el PR [#21](https://github.com/Genoshan/wesplit/pull/21) y confirmar que el deploy sirve el botón ícono y el tema claro blanco.
+1. Mergear el PR #23 (`ui/palette-option-3` → `main`) y confirmar el deploy con la paleta nueva en modo claro.
 
 ## Restricciones vigentes
 
-- Sin `git add`/`commit`/`push`/PR sin autorización explícita.
+- `git add`/`commit`/`push` y creación de PR autorizados por el usuario; el usuario mergea los PR en la web.
 - Sin leer ni reproducir valores de `server/.env`.
 - Los dos hallazgos ALTO de secretos en archivos de log se dejan intactos salvo autorización.
 - Sin cambios de dependencias, versiones o upgrade de OpenCode sin autorización.
