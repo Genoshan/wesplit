@@ -402,6 +402,12 @@ async function initGoogleAuth(clientOrigin) {
     return { authUrl, state, cookieToken };
 }
 
+// Google usa representaciones distintas según el endpoint: booleano en OIDC
+// userinfo, string "true" en tokeninfo. Aceptar ambas sin confundir "false".
+function googleVerifiedFlag(value) {
+    return value === true || String(value).trim().toLowerCase() === 'true';
+}
+
 async function handleGoogleCallback(code, state, cookieToken) {
     const sessionData = googleSessions.get(state);
     if (!sessionData) {
@@ -442,22 +448,12 @@ async function handleGoogleCallback(code, state, cookieToken) {
             googleSessions.delete(state);
             return { error: 'No se pudo obtener el email de Google' };
         }
-        // El endpoint tokeninfo de Google devuelve `email_verified` como string
-        // ("true"), mientras que userinfo devuelve booleano (true). Aceptar ambos.
-        const emailVerified = userInfoResult.email_verified === true
-            || String(userInfoResult.email_verified).trim().toLowerCase() === 'true';
-        if (!emailVerified) {
-            googleSessions.delete(state);
-            return { error: 'El email de Google no está verificado' };
-        }
-        if (!isGoogleEmailAllowed(email)) {
-            return { error: 'Este email no está autorizado para ingresar' };
-        }
 
-        // Obtener nombre del usuario desde Google
-        let googleName = '';
+        // userinfo (OIDC) devuelve `email_verified` booleano; tokeninfo lo devuelve
+        // como string. Se consulta una sola vez y sirve para nombre y verificación.
+        let userInfo = {};
         try {
-            const nameResponse = await new Promise((resolve, reject) => {
+            userInfo = await new Promise((resolve, reject) => {
                 https.get(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${encodeURIComponent(tokenResponse.access_token)}`, res => {
                     let body = '';
                     res.on('data', chunk => { body += chunk; });
@@ -470,9 +466,27 @@ async function handleGoogleCallback(code, state, cookieToken) {
                     });
                 }).on('error', reject);
             });
-            googleName = nameResponse.name || '';
         } catch (e) {
-            console.warn('[GOOGLE AUTH] No se pudo obtener el nombre:', e.message);
+            console.warn('[GOOGLE AUTH] No se pudo obtener userinfo:', e.message);
+        }
+        const googleName = userInfo.name || '';
+
+        // Log temporal: solo nombres de campos y tipos, nunca valores ni tokens.
+        const flagKeys = ['email_verified', 'verified_email'];
+        console.log('[GOOGLE DEBUG] tokeninfo:', flagKeys.map(k => `${k}=${k in userInfoResult}`).join(' '));
+        console.log('[GOOGLE DEBUG] userinfo:', flagKeys.map(k => `${k}=${k in userInfo}`).join(' '));
+        console.log('[GOOGLE DEBUG] tipos:', typeof userInfoResult.email_verified, typeof userInfo.email_verified);
+
+        const emailVerified = googleVerifiedFlag(userInfoResult.email_verified)
+            || googleVerifiedFlag(userInfoResult.verified_email)
+            || googleVerifiedFlag(userInfo.email_verified)
+            || googleVerifiedFlag(userInfo.verified_email);
+        if (!emailVerified) {
+            googleSessions.delete(state);
+            return { error: 'El email de Google no está verificado' };
+        }
+        if (!isGoogleEmailAllowed(email)) {
+            return { error: 'Este email no está autorizado para ingresar' };
         }
 
         // Verificar si el usuario ya existe por email
