@@ -442,7 +442,11 @@ async function handleGoogleCallback(code, state, cookieToken) {
             googleSessions.delete(state);
             return { error: 'No se pudo obtener el email de Google' };
         }
-        if (userInfoResult.email_verified !== true) {
+        // El endpoint tokeninfo de Google devuelve `email_verified` como string
+        // ("true"), mientras que userinfo devuelve booleano (true). Aceptar ambos.
+        const emailVerified = userInfoResult.email_verified === true
+            || String(userInfoResult.email_verified).trim().toLowerCase() === 'true';
+        if (!emailVerified) {
             googleSessions.delete(state);
             return { error: 'El email de Google no está verificado' };
         }
