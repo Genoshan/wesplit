@@ -1,23 +1,29 @@
-/* Splitwise (default) */
+/* Splitwise light — paleta Bootstrap 5 estándar (fondo blanco) */
 [data-bs-theme="splitwise"],
 :root {
-    --bs-body-bg: #f7f8fa;
-    --bs-body-color: #2d3436;
-    --bs-border-color: #e0e4e8;
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #212529;
+    --bs-border-color: #dee2e6;
     --border-color: var(--bs-border-color);
-    --bs-primary: #ff652f;
-    --bs-success: #5bc5a7;
-    
+    --bs-primary: #0d6efd;
+    --bs-primary-rgb: 13, 110, 253;
+    --bs-success: #198754;
+    --bs-success-rgb: 25, 135, 84;
+    --bs-danger: #dc3545;
+    --bs-danger-rgb: 220, 53, 69;
+    --bs-secondary: #6c757d;
+    --bs-secondary-rgb: 108, 117, 125;
+
     --card-bg: #ffffff;
-    --text-primary: #2d3436;
-    --text-secondary: #636e72;
-    --accent-color: #ff652f;
-    --accent-strong: #e85a2a;
-    --soft-panel: #f0f2f5;
-    --success-color: #5bc5a7;
-    --danger-color: #ff652f;
-    --owed-color: #5bc5a7;
-    --owe-color: #ff652f;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --accent-color: #0d6efd;
+    --accent-strong: #0b5ed7;
+    --soft-panel: #f8f9fa;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --owed-color: #198754;
+    --owe-color: #dc3545;
 }
 
 /* Splitwise Dark */
@@ -75,6 +81,7 @@ body {
 
 html {
     -webkit-overflow-scrolling: touch;
+    background-color: var(--bs-body-bg);
 }
 
 body {
@@ -343,6 +350,15 @@ body {
 .btn-action:disabled {
     cursor: wait;
     opacity: 0.72;
+}
+
+/* Tema claro: los botones semánticos conservan el color Bootstrap */
+[data-bs-theme="splitwise"] .btn-success.btn-action {
+    background: var(--bs-success);
+}
+
+[data-bs-theme="splitwise"] .btn-success.btn-action:hover {
+    background: #146c43;
 }
 
 .form-feedback {

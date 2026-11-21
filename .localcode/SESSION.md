@@ -50,6 +50,7 @@
 - Merge de `origin/main`: pagos, CSV y filtro por fechas portados al modelo group-scoped. `npx jest tests/payment.int.test.js`: 9/9. Smoke UI con cuentas ficticias (alta, listado, baja, balances y sin errores de consola). Cuentas limpiadas.
 - Fix de tema (#20): toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
 - Botón de tema como ícono (🌙/☀️), fuera del dropdown de usuario y al lado de `+ Grupo`; verificado en navegador.
+- Rediseño del tema claro con paleta Bootstrap 5 estándar: fondo blanco `#ffffff`, primario azul `#0d6efd`, éxito verde `#198754`, peligro rojo `#dc3545`, grises `--bs-*`; `html` hereda el fondo; botón de pago conserva verde Bootstrap. Tema oscuro intacto (verificado estilos computados).
 
 ## Próximos pasos
 

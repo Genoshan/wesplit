@@ -347,3 +347,21 @@ Cada entrada debe seguir este formato:
 
 ### Estado final
 - Rama `ui/theme-button` creada desde `main` (`76bd19c`), lista para PR. Requiere que el deploy se reconstruya para verse en producción.
+
+## [2026-11-21] Rediseño del tema claro (paleta Bootstrap 5)
+
+### Contexto
+- El usuario pidió rediseñar por completo el modo claro hasta que se viera como un template Bootstrap recién bajado: fondo blanco, botones azules, verde, etc. El modo oscuro debía quedar intacto.
+
+### Cambios realizados
+- `style.css`: bloque claro pasa a `#ffffff` fondo, `#212529` texto, `#dee2e6` bordes, `#0d6efd` primario, `#198754` éxito, `#dc3545` peligro, `#f8f9fa` paneles suaves y `-rgb` variants acordes.
+- `html` hereda `background-color: var(--bs-body-bg)` para evitar blanco del navegador en overscroll.
+- Regla acotada a `[data-bs-theme="splitwise"]` para que `.btn-success.btn-action` conserve el verde Bootstrap (el oscuro sigue con naranja vía `--accent-color`).
+
+### Verificación
+- Estilos computados con transiciones asentadas: claro = body `rgb(255,255,255)`, cards `rgb(255,255,255)` con borde `rgb(222,226,230)`, primario `rgb(13,110,253)`, pestaña activa azul; pago verde `rgb(25,135,84)`.
+- Oscuro sin cambios: body `rgb(26,29,33)`, cards `rgb(36,40,48)`, acento/pestaña `rgb(255,101,47)`, bordes `rgb(45,49,57)`.
+- Cuenta temporal eliminada y pestañas cerradas.
+
+### Estado final
+- Incluido en la rama `ui/theme-button` junto al botón ícono; pendiente de PR y deploy.
