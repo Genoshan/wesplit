@@ -41,8 +41,8 @@ node index.js            # si no está corriendo
 
 | ID | Caso | Pasos | Esperado |
 |---|---|---|---|
-| AUTH-01 | Registro manual válido | Registrar usuario con password de 12+ caracteres | 200, grupo automático "Mis gastos" creado |
-| AUTH-02 | Validaciones | Password de 11, username de 2, email sin `@` | 400 con mensaje específico |
+| AUTH-01 | Registro manual válido | Registrar usuario con password de 8+ caracteres con letra, número y símbolo (ej. `Abcdef1!`) | 200, grupo automático "Mis gastos" creado |
+| AUTH-02 | Validaciones | Password de 7, password sin símbolo, username de 2, email sin `@` | 400 con mensaje específico |
 | AUTH-03 | Duplicados | Repetir username y luego email (distinto username) | 409 |
 | AUTH-04 | Login/logout | Login correcto, `/api/auth/check`, logout, re-check | Cookie HttpOnly; check 200 antes, 401 después |
 | AUTH-05 | Google | `GET /api/google/config`; si `enabled`, probar init/callback (sin credentials reales, solo verificar que no exponer secrets) | Config booleano; flujo sin errores sin estado/ nonce inválidos |
@@ -50,6 +50,7 @@ node index.js            # si no está corriendo
 | AUTH-07 | Perfil sin cambios | Guardar sin modificar nada | Mensaje "Sin cambios", sin mutación |
 | AUTH-08 | Eliminar cuenta | Crear datos, borrar cuenta con password correcta e incorrecta | Incorrecta → 403; correcta → 200, datos en cascada |
 | AUTH-09 | Rate limits | Disparar register 11 veces seguidas | 429 con mensaje en español |
+| AUTH-10 | Login por email | Registrar usuario, luego `POST /api/login` con el **email** en `username`; repetir con el username en mayúsculas | 200 en ambos; `/api/auth/check` devuelve la misma cuenta |
 
 ### 2. Grupos
 

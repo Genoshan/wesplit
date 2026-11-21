@@ -452,3 +452,10 @@ Cada entrada debe seguir este formato:
 - El usuario pidió análisis del repo: Fase 1 y 2 del roadmap completas, PRs #19–#27 mergeados, sin PRs abiertos, producción sana. Aprobó un PR de limpieza aparte de los cambios funcionales.
 - Se sacaron los tres logs `[GOOGLE DEBUG]` de `server/auth.js` (se conserva la verificación robusta con `userinfo`). Se actualizaron `README.md`, `ROADMAP.md`, `AGENTS.md`, `TODO_BACKLOG.md` y `plans/sdd-google-oauth.md`, que todavía hablaban del PR #21 abierto, paleta azul, grupo `Casa`, invitaciones sin aceptación, `/api/currencies`, pagos sin UI y la URL vieja de `genoshan.com`.
 - Se suben finalmente `docs/E2E_DOS_USUARIOS.md` y las correcciones de `docs/QA_TESTING_PROMPT.md`, que estaban sin commitear a propósito.
+
+## [2026-11-21] Política de password y login por email
+
+- El usuario pidió bajar el mínimo de 12 caracteres a 8 alfanuméricos + un carácter distinto, y reportó que la cuenta creada manualmente no entraba pero Google sí. Optó por mínimo 8 con letra, número y símbolo (Unicode aware) y por aceptar email o username en el login manual.
+- Causa del login: `/api/register` guarda username y email, pero `findUser()` solo consultaba `WHERE username = ?`; Google busca por email. Se normaliza el identificador (trim + lowercase) y se hace fallback a `LOWER(email)` solo si no matchea el username y el valor contiene `@`. Se mantiene prioridad de username y el fallback legacy intacto.
+- La validación se centralizó en `server/password.js` (`validatePassword`) y se usa en registro y cambio de contraseña del perfil; el frontend replica la regla para feedback inmediato. Los tests de integración ahora aceptan `BASE_URL` por entorno para poder apuntar a una instancia limpia cuando el rate limit está agotado.
+- Verificación: 8 casos manuales end-to-end en el servidor de prueba (registro 8 chars, rechazo de 5 y de 8 sin símbolo, login por email, login con mayúsculas, cambio de password y relogin, limpieza). Suite completa: **24/24** (6 nuevos unit tests de password). PR funcional #29, documentación en el #28 para evitar conflictos.

@@ -10,7 +10,7 @@
 - [x] Categorías, historial con filtros (texto, categoría, pagador, mes), gráfico por categoría.
 - [x] Balances por miembro con "pagó / gastó / saldo" (todos los períodos).
 - [x] CRUD de gastos: alta, edición con modal y borrado físico con limpieza de splits.
-- [x] Autenticación con usuario/contraseña (bcryptjs, mínimo 12) y Google OAuth.
+- [x] Autenticación con usuario/contraseña (bcryptjs, mínimo 8 con letra, número y símbolo; login por username o email) y Google OAuth.
 - [x] Sesiones en cookie HTTP-only, CSP + SRI, rate limits y guards de acceso.
 - [x] Temas claro/oscuro, SweetAlert2 y `.localcode/` + `memory/`.
 

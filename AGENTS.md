@@ -22,7 +22,7 @@ Aplicación web de gastos compartidos inspirada en Splitwise. Multiusuario, con 
 
 ## Estado real (verificado 2026-11-20)
 
-- **Autenticación**: registro con username/email/password (mínimo 12 caracteres, `bcryptjs` con rehash transparente del formato legacy) y Google OAuth. La allowlist `GOOGLE_AUTHORIZED_EMAILS` está **comentada** en `.env` → entra cualquier email de Google verificado.
+- **Autenticación**: registro con username/email/password (mínimo 8 caracteres con letra, número y símbolo; `bcryptjs` con rehash transparente del formato legacy) y Google OAuth. El login manual acepta username **o email** en el mismo campo. La allowlist `GOOGLE_AUTHORIZED_EMAILS` está **comentada** en `.env` → entra cualquier email de Google verificado.
 - **Grupos**: cada registro crea su propio grupo `Mis gastos` con el creador como admin. Un usuario puede pertenecer a varios grupos, elegir cuál usar y la selección persiste en `localStorage['seg_group']`.
 - **Invitación**: por username con normalización y sugerencias; aceptación/rechazo dentro de la app, sin link con token.
 - **Roles**: `users.global_role` (admin/member global) y `group_members.role` (admin/member por grupo) son independientes.

@@ -43,7 +43,7 @@ Con el servidor corriendo, abrir `http://localhost:4000`. No hace falta un servi
 
 ## 5. Funcionalidades Integradas
 
-- **Autenticación**: registro con username/email/password (mínimo 12 caracteres) y Google OAuth.
+- **Autenticación**: registro con username/email/password (mínimo 8 caracteres con al menos una letra, un número y un símbolo) y Google OAuth. El login manual acepta username o email en el mismo campo.
 - **Grupos**: cada registro crea un grupo `Mis gastos` propio; invitación por username con normalización y sugerencias de búsqueda.
 - **Gastos**: modos `equal`, `solo` y `custom`, con reparto exacto en centavos entre N miembros.
 - **Balances**: calculados en servidor por grupo.

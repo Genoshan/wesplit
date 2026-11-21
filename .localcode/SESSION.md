@@ -8,7 +8,7 @@
 
 ### Implementado
 - Grupos dinámicos con N miembros: alta, borrado, invitación y miembros con estados.
-- Autenticación: registro con username/email/password (mínimo 12, `bcryptjs` + rehash legacy) y Google OAuth (allowlist desactivada → cualquier email verificado).
+- Autenticación: registro con username/email/password (mínimo 8 con letra, número y símbolo; `bcryptjs` + rehash legacy) y Google OAuth (allowlist desactivada → cualquier email verificado). Login manual por username o email.
 - Roles: `global_role` informativo sin backoffice; `role` por grupo (admin/member) independiente.
 - Frontend: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI + CSP; sin handlers inline.
 - Pagadores y splits desde miembros reales; `evenSplits()` reparte centavos exactos entre N.
@@ -90,11 +90,12 @@
 
 - Usuario aprobó un único PR con: eliminación de los logs temporales `[GOOGLE DEBUG]` de `server/auth.js`, actualización de `README.md`, `ROADMAP.md`, `AGENTS.md`, `TODO_BACKLOG.md` y `plans/sdd-google-oauth.md`, y commit de `docs/E2E_DOS_USUARIOS.md` + correcciones de `docs/QA_TESTING_PROMPT.md`.
 - El código de verificación robusta (`googleVerifiedFlag`, `userinfo`) se conserva intacto; solo se sacan los logs.
+- La documentación de este PR ya refleja la política de password de 8 caracteres y el login por email que implementa el PR funcional aparte, para que no haya conflictos entre ambos.
 
 ## Próximos pasos
 
-1. Mergear el PR de limpieza y **Manual Deploy** en Render.
-2. Verificar que `/api/version` reporte el commit nuevo y que no aparezcan líneas `[GOOGLE DEBUG]` en los logs tras un login con Google.
+1. Mergear el PR de limpieza (#28) y el funcional (#29) y **Manual Deploy** en Render con el último commit.
+2. Verificar que `/api/version` reporte el commit nuevo, que no aparezcan líneas `[GOOGLE DEBUG]` y que el login con email y una password de 8 caracteres funcione.
 3. Roadmap: Fase 1 y 2 completas. Diferidos: backoffice, gráfico temporal, 2FA/notificaciones e indicador de carga. Nada bloqueante.
 
 ## Restricciones vigentes
