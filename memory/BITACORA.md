@@ -397,3 +397,11 @@ Cada entrada debe seguir este formato:
 - QA-003: `esc()` del export CSV prefija con `'` los valores que empiezan con `=`, `+`, `-` o `@` para evitar inyección de fórmulas. Verificado en CSV generado.
 - QA-004: `/api/users/search` (`server/index.js:480-493`) escapa `\`, `%` y `_` en el término y usa `LIKE ? ESCAPE '\'`; los comodines del usuario ahora son texto literal. Verificado: `%`, `_` y `\` → 0 resultados, `qa` → coincidencia por prefijo.
 - Jest 9/9 después de los cambios; cuentas de prueba eliminadas (200) y trabajo diferido de limpieza cancelado.
+
+### Segunda tanda de QA (orden aceptado por el usuario)
+- QA-005: `POST /:id/payments` ya no lee `currency` del body; usa `base_currency` del grupo (igual que gastos). Cubierto por test.
+- QA-006: `#no-groups-alert` en `index.html` + lógica en `loadAuth()` que oculta tabs y contenido cuando no hay grupos. Verificado en browser con cuenta descartable: alert visible, tabs ocultos. La primera verificación falló por `app.js` cacheado; con cache-bust funcionó.
+- QA-007: texto aclaratorio en el modal de edición: los miembros inactivos se muestran para conservar el historial (no se ocultan).
+- QA-008: `docs/flow_diagram.md` y `context/project.md` actualizados a "Mis gastos", invitaciones con aceptación, fecha validada y moneda única también en pagos.
+- Tests: nuevo `server/tests/expense.int.test.js` con 9 casos (centavos equal, fechas, moneda, custom 1-centavo, PUT, DELETE, 403, 401, pago con moneda forzada). Total **18/18**.
+- Limpieza: `qanogroups2026` y `qanogroups2` eliminadas (200) tras reiniciar el server para resetear el limiter de auth.

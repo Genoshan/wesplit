@@ -176,6 +176,14 @@ async function loadAuth() {
             rememberGroup(currentGroupId);
         }
 
+        const hasGroups = Boolean(data.groups && data.groups.length > 0);
+        const noGroupsAlert = document.getElementById('no-groups-alert');
+        if (noGroupsAlert) noGroupsAlert.hidden = hasGroups;
+        const appTabs = document.getElementById('app-tabs');
+        if (appTabs) appTabs.hidden = !hasGroups;
+        const tabContent = document.getElementById('app-tab-content');
+        if (tabContent) tabContent.hidden = !hasGroups;
+
         document.getElementById('login-screen').hidden = true;
         document.getElementById('app-screen').hidden = false;
         renderHeader();

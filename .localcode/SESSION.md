@@ -55,7 +55,8 @@
 - `index.html` incluye `<meta name="darkreader-lock">` y el CSS usa `color-scheme: only light/dark` para que Dark Reader / auto-dark no pisen el tema.
 - Variables `-bs-*` del bloque oscuro completadas: encabezados de tabla legibles (fix de "Liquidaciones").
 - QA: `docs/QA_TESTING_PROMPT.md` (prompt reutilizable) y `docs/QA_REVIEW_2026-11-21.md` (resultados). Jest 9/9 y E2E manual OK.
-- Correcciones de QA: persistencia de grupo (`seg_group`), validación estricta de fecha en gastos, escape de fórmulas en CSV y comodines LIKE escapados en `/api/users/search`. Pendientes/decididas por el usuario: moneda de pagos, pagador en edición, docs desactualizados, cobertura de tests.
+- Correcciones de QA (completas): persistencia de grupo (`seg_group`), validación estricta de fecha en gastos, escape de fórmulas en CSV, comodines LIKE escapados, moneda única en pagos, estado sin grupos, aclaración de pagador inactivo y docs actualizados.
+- Tests: 18/18 (`payment.int.test.js` + `expense.int.test.js`). QA review en `docs/QA_REVIEW_2026-11-21.md`.
 
 ## Próximos pasos
 

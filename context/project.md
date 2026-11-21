@@ -1,6 +1,6 @@
 # Proyecto: WeSplit — Gastos compartidos
 
-> Actualizado al 2026-11-20. La definición original (MVP de dos personas sin login) quedó obsoleta; este archivo describe el estado real.
+> Actualizado al 2026-11-21. La definición original (MVP de dos personas sin login) quedó obsoleta; este archivo describe el estado real.
 
 ## Objetivo del proyecto
 
@@ -9,13 +9,13 @@ Aplicación web de gastos compartidos inspirada en Splitwise, para uso doméstic
 ## Alcance actual
 
 - **Usuarios**: registro con username/email/password (mínimo 12 caracteres, `bcryptjs` con rehash legacy) y login con Google OAuth (cualquier email verificado; la allowlist está desactivada en `.env`).
-- **Grupos**: cada registro crea automáticamente un grupo `Casa` propio, con el creador como admin. Un usuario puede pertenecer a varios grupos y cambiar entre ellos desde el selector del header.
-- **Invitaciones**: por username exacto, sin link y sin aceptación del invitado. El invitado debe estar registrado antes.
+- **Grupos**: cada registro crea automáticamente un grupo `Mis gastos` propio, con el creador como admin. Un usuario puede pertenecer a varios grupos y cambiar entre ellos desde el selector del header; el grupo elegido se recuerda al recargar.
+- **Invitaciones**: por username exacto, sin link. El invitado debe estar registrado antes y **debe aceptar** la invitación desde la pestaña Miembros; mientras tanto queda como `pending` y no ve los datos del grupo.
 - **Roles**: dos niveles independientes — `users.global_role` (admin/member global) y `group_members.role` (admin/member dentro de cada grupo).
 - **Gastos**: modos `equal`, `solo` y `custom`. `evenSplits()` reparte los centavos sobrantes para que la suma de partes sea exacta entre N miembros.
 - **Balances**: calculados en servidor (`GET /api/groups/:id/balance`) con `total_paid - total_spent + pagos_net` por miembro.
 - **Pagos**: settle up integrado con `GET/POST/DELETE /api/groups/:id/payments`, UI en la pestaña Gastos, historial, descuento en balances y exportación CSV.
-- **Moneda**: **moneda única por grupo**, ya implementada. Se eliminaron la tabla `currencies`, el seed de tasas y sus endpoints; el alta de gasto ignora la moneda enviada y usa `base_currency` del grupo. No hay API de cotización por ahora.
+- **Moneda**: **moneda única por grupo**, ya implementada. Se eliminaron la tabla `currencies`, el seed de tasas y sus endpoints; el alta de gasto **y de pago** ignoran la moneda enviada y usan `base_currency` del grupo. No hay API de cotización por ahora.
 - **Recurrentes**: **eliminados por completo** (rutas, tabla, CSS y documentación) por bajo valor.
 - **Frontend**: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI en CDNs y CSP; sin handlers inline.
 

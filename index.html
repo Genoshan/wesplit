@@ -110,6 +110,10 @@
             </li>
         </ul>
 
+        <div id="no-groups-alert" class="alert alert-info mt-3" role="status" hidden>
+            No tenés grupos activos. Creá uno con el botón <strong>+ Grupo</strong> para empezar a registrar gastos.
+        </div>
+
         <div class="tab-content app-tab-content" id="app-tab-content">
             <!-- Gastos -->
             <div class="tab-pane fade show active" id="pane-expenses" role="tabpanel">
@@ -344,6 +348,7 @@
                         </div>
                         <div class="col-6"><label for="edit-payer">Pagó</label><select id="edit-payer" class="form-select"></select></div>
                     </div>
+                    <p class="form-text mt-2 mb-0">Se muestran también miembros inactivos para conservar el historial del gasto.</p>
                     <label class="mt-3">Split</label>
                     <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división al editar">
                         <label class="split-option"><input type="radio" name="edit_split_mode" value="equal" checked><span class="split-label">Partes iguales</span></label>

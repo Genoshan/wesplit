@@ -840,7 +840,7 @@ router.post('/:id/payments', async (req, res) => {
     try {
         const groupId = req.params.id;
         const { userId, username } = req.user;
-        const { from_user, to_user, amount, currency, date, description } = req.body;
+        const { from_user, to_user, amount, date, description } = req.body;
 
         const parsedAmount = Number(amount);
         if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -874,10 +874,10 @@ router.post('/:id/payments', async (req, res) => {
             return res.status(400).json({ error: 'Los participantes deben ser miembros del grupo' });
         }
 
-        const currencyCode = normalizeCurrency(currency);
-        if (!currencyCode) {
-            return res.status(400).json({ error: 'Moneda inválida' });
-        }
+        // Moneda única por grupo: se ignora cualquier moneda enviada por el
+        // front, igual que en gastos. Así los pagos siempre cuadran con los balances.
+        const groupInfo = await db.execute('SELECT base_currency FROM groups WHERE id = ?', [groupId]);
+        const currencyCode = normalizeCurrency(groupInfo.rows[0]?.base_currency) || 'UYU';
 
         const result = await db.execute({
             sql: 'INSERT INTO group_payments (group_id, from_user, to_user, amount, currency, date, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
