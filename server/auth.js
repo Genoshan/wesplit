@@ -553,7 +553,11 @@ async function handleGoogleCallback(code, state, cookieToken) {
 async function getUserGroups(userId) {
     try {
         const result = await db.execute(`
-            SELECT g.*, gm.role as member_role
+            SELECT g.*, gm.role as member_role,
+                (SELECT GROUP_CONCAT(u.username, ', ')
+                   FROM group_members gm2
+                   JOIN users u ON u.id = gm2.user_id
+                  WHERE gm2.group_id = g.id AND gm2.status = 'active') AS member_names
             FROM groups g
             JOIN group_members gm ON g.id = gm.group_id
             WHERE gm.user_id = ? AND gm.status = 'active'

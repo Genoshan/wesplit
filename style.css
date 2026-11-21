@@ -268,6 +268,46 @@ body {
     margin-left: 8px;
 }
 
+/* Selector de grupos: nombre arriba, miembros activos abajo. Usa colores de
+   Bootstrap para que el menú se vea bien en claro, oscuro y Splitwise. */
+.group-selector-toggle {
+    max-width: 210px;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-selector-menu {
+    min-width: 270px;
+    max-width: 330px;
+    padding: 0.35rem;
+}
+
+.group-option {
+    white-space: normal;
+    padding: 0.5rem 0.7rem;
+}
+
+.group-option.is-current {
+    background: rgba(var(--bs-primary-rgb), 0.12);
+}
+
+.group-option-name {
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.group-option-id {
+    font-weight: 400;
+    opacity: 0.7;
+}
+
+.group-option-members {
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
 .eyebrow {
     margin: 0 0 4px;
     color: var(--accent-strong);
@@ -811,6 +851,14 @@ body {
     .header-actions {
         flex-wrap: wrap;
         gap: 8px;
+    }
+
+    .group-selector-toggle {
+        max-width: 145px;
+    }
+
+    .group-selector-menu {
+        min-width: 240px;
     }
 
     .balance-panel {

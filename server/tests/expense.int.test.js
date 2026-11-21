@@ -92,6 +92,15 @@ afterAll(async () => {
 }, 15000);
 
 describe('Gastos group-scoped', () => {
+  test('auth/check trae los miembros activos del grupo para el selector', async () => {
+    const res = await fetch(`${BASE_URL}/api/auth/check`, opts(users.owner, 'GET'));
+    const data = await res.json();
+    const group = data.groups.find(g => String(g.id) === String(groupId));
+    expect(group).toBeDefined();
+    expect(group.member_names).toContain(users.owner.username);
+    expect(group.member_names).toContain(users.member.username);
+  });
+
   test('POST equal reparte los centavos sobrantes sin perder importes', async () => {
     const res = await fetch(`${BASE_URL}/api/groups/${groupId}/expenses`, opts(users.owner, 'POST',
       expensePayload({ description: 'gasto_centavos', amount: 0.01 })));
