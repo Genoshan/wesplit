@@ -3,6 +3,18 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 process.on('uncaughtException', (err) => { console.error('[FATAL]', err); process.exit(1); });
 process.on('unhandledRejection', (reason, promise) => { console.error('[UNHANDLED]', reason); });
 
+// Identificador de deploy. Se calcula una sola vez al arrancar: en Render viene
+// de las variables que el propio servicio inyecta; en local se marca como tal.
+// Antes `buildTime` devolvía la hora de cada request, así que no servía para
+// saber qué versión estaba corriendo.
+const buildInfo = {
+    version: require('../package.json').version,
+    commit: (process.env.RENDER_GIT_COMMIT || 'local').slice(0, 7),
+    branch: process.env.RENDER_GIT_BRANCH || 'local',
+    preview: process.env.IS_PULL_REQUEST === 'true',
+    startedAt: new Date().toISOString()
+};
+
 function categoryName(cat) {
     const names = {
         'food': 'Alimentación',
@@ -42,12 +54,11 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const COOKIE_FLAGS = `HttpOnly; SameSite=Strict; Path=/${IS_PRODUCTION ? '; Secure' : ''}`;
 
 // Version endpoint (public, no auth required)
-const pkg = require('../package.json');
 app.get('/api/version', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    res.json({ version: pkg.version, buildTime: new Date().toISOString() });
+    res.json({ ...buildInfo, buildTime: buildInfo.startedAt });
 });
 
 // Security: CSP activa. Los handlers inline se sacaron de index.html/app.js

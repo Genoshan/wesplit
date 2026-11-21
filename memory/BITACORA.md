@@ -405,3 +405,9 @@ Cada entrada debe seguir este formato:
 - QA-008: `docs/flow_diagram.md` y `context/project.md` actualizados a "Mis gastos", invitaciones con aceptación, fecha validada y moneda única también en pagos.
 - Tests: nuevo `server/tests/expense.int.test.js` con 9 casos (centavos equal, fechas, moneda, custom 1-centavo, PUT, DELETE, 403, 401, pago con moneda forzada). Total **18/18**.
 - Limpieza: `qanogroups2026` y `qanogroups2` eliminadas (200) tras reiniciar el server para resetear el limiter de auth.
+
+### Marcador de versión 1.0.0
+- El usuario pidió poder identificar la versión desplegada "a simple vista" pero sin mostrarla en la UI.
+- `package.json` → `1.0.0`; `<meta name="app-version" content="1.0.0">` en `index.html` (solo DevTools/curl); `console.info('WeSplit v… · <commit>')` al cargar `app.js`, con `APP_VERSION` como fallback.
+- `/api/version` devolvía `buildTime: new Date()` **por request** (engañoso). Ahora `server/index.js` arma `buildInfo` una vez al arrancar con `version`, `commit` y `branch` de `RENDER_GIT_COMMIT` / `RENDER_GIT_BRANCH` (Render), `preview` de `IS_PULL_REQUEST` y `startedAt` real; `buildTime` queda como alias de `startedAt`.
+- Verificado local: endpoint estable entre llamadas, meta 1.0.0, consola con la línea y `1.0.0` **ausente** del texto visible. Jest 18/18.
