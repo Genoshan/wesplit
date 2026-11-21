@@ -1,3 +1,4 @@
+const APP_VERSION = '1.0.0';
 const themeKey = 'seg_theme';
 const groupKey = 'seg_group';
 const defaultTheme = 'splitwise';
@@ -28,10 +29,22 @@ function rememberGroup(groupId) {
     else localStorage.setItem(groupKey, String(groupId));
 }
 
+// Marcador de versión: se ve solo en la consola de DevTools, nunca en la UI.
+async function logBuildInfo() {
+    try {
+        const info = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json());
+        const suffix = info.branch && info.branch !== 'local' ? ` · ${info.branch}` : '';
+        console.info(`%cWeSplit v${info.version} · ${info.commit}${suffix}`, 'color:#0d6efd;font-weight:bold');
+    } catch (_) {
+        console.info(`%cWeSplit v${APP_VERSION}`, 'color:#0d6efd;font-weight:bold');
+    }
+}
+
 const initialTheme = localStorage.getItem(themeKey) || defaultTheme;
 document.documentElement.setAttribute('data-bs-theme', initialTheme);
 // Update toggle button after DOM loads
 document.addEventListener('DOMContentLoaded', () => {
+    logBuildInfo();
     updateThemeToggle(initialTheme);
 
     // Handlers antes inline (necesario para poder usar CSP sin 'unsafe-inline').

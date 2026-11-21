@@ -57,6 +57,7 @@
 - QA: `docs/QA_TESTING_PROMPT.md` (prompt reutilizable) y `docs/QA_REVIEW_2026-11-21.md` (resultados). Jest 9/9 y E2E manual OK.
 - Correcciones de QA (completas): persistencia de grupo (`seg_group`), validación estricta de fecha en gastos, escape de fórmulas en CSV, comodines LIKE escapados, moneda única en pagos, estado sin grupos, aclaración de pagador inactivo y docs actualizados.
 - Tests: 18/18 (`payment.int.test.js` + `expense.int.test.js`). QA review en `docs/QA_REVIEW_2026-11-21.md`.
+- Versión 1.0.0: `package.json`, meta `app-version` en `index.html`, `console.info` en `app.js` y `/api/version` con commit/branch reales de Render (`startedAt` estable; antes `buildTime` era la hora de cada request). Verificar en prod con `/api/version` o DevTools → Console.
 
 ## Próximos pasos
 
