@@ -310,4 +310,23 @@ Cada entrada debe seguir este formato:
 - Revisar el diff completo vs `origin/main` antes de autorizar `add`/`commit`/`push`/PR.
 - No leer valores de `server/.env`; dejar intactos los hallazgos ALTO de secretos en logs.
 - Merge de `origin/main` resuelto conservando la arquitectura group-scoped: se portaron pagos, CSV y filtro de fechas; tests 9/9 y smoke UI OK; queda `git add`, merge commit y push autorizados.
-- PR final lo crea el usuario en GitHub (`feature/dynamic-groups` → `main`).
+- PR #19 creado con GitHub CLI a pedido del usuario (la web no permitía crear el PR) y mergeado por él: https://github.com/Genoshan/wesplit/pull/19 — merge commit `a43c216`.
+
+## [2026-11-21] Fix de tema: claro/oscuro explícitos
+
+### Contexto
+- El usuario reportó que ya no veía modo claro, solo oscuro y una variante; coincidía con los temas viejos (`github`, `dracula`, `nord`) que aún podrían estar en el deploy previo al PR #19.
+- Localmente el toggle funcionaba, pero `updateThemeToggle()` apuntaba a `#theme-toggle` en vez de `#toggle-theme-btn`, así que la etiqueta nunca cambiaba.
+
+### Cambios realizados
+- `app.js`: corregido el ID del botón y etiquetas explícitas `🌙 Modo oscuro` / `☀️ Modo claro`.
+- `index.html`: etiqueta inicial del dropdown acorde al tema claro por defecto.
+- `style.css`: eliminados bloques muertos de `github-disabled`, `dracula`, `nord` y `.theme-select`; reglas de `.btn-google` convertidas a `splitwise-dark`.
+
+### Verificación
+- `node --check app.js` limpio; sin referencias a temas viejos en `app.js`, `index.html` ni `style.css`.
+- En navegador: claro `rgb(247,248,250)` ↔ oscuro `rgb(26,29,33)`, etiqueta y título del botón cambian correctamente.
+
+### Estado final
+- Rama `fix/theme-toggle` creada desde `main` (`a43c216`), lista para PR.
+- Si el usuario sigue viendo los temas viejos, es el deploy/cache: debe refrescarse después de mergear este fix.
