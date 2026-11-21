@@ -504,8 +504,8 @@ async function handleGoogleCallback(code, state, cookieToken) {
             const passwordHash = await hashPassword(randomPassword);
 
             const insertResult = await db.execute({
-                sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
-                args: [username, passwordHash, 'member', email, googleName || username],
+                sql: 'INSERT INTO users (username, password_hash, global_role, email, name, auth_provider) VALUES (?, ?, ?, ?, ?, ?)',
+                args: [username, passwordHash, 'member', email, googleName || username, 'google'],
             });
             dbUser = { id: Number(insertResult.lastInsertRowid), username, name: googleName || username };
 

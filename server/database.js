@@ -19,6 +19,24 @@ async function markMigration(name) {
     ]);
 }
 
+// Promueve a superadmin al usuario indicado por SUPERADMIN_USERNAME.
+// El valor de la ENV nunca se imprime ni se devuelve al front-end.
+async function bootstrapSuperadmin(targetUsername) {
+    const envName = (process.env.SUPERADMIN_USERNAME || '').trim().toLowerCase();
+    const candidate = String(targetUsername || '').trim().toLowerCase();
+    if (!envName || !candidate || candidate !== envName) return false;
+
+    const found = await db.execute('SELECT id FROM users WHERE LOWER(username) = ? LIMIT 1', [envName]);
+    if (found.rows.length === 0) return false;
+
+    await db.execute(
+        'INSERT OR IGNORE INTO superadmins (user_id, created_by) VALUES (?, ?)',
+        [Number(found.rows[0].id), 'env-bootstrap']
+    );
+    console.log('[DB] Bootstrap de superadmin aplicado');
+    return true;
+}
+
 async function initDB() {
     await db.execute(`
         CREATE TABLE IF NOT EXISTS migrations (
@@ -51,6 +69,16 @@ async function initDB() {
             ip TEXT DEFAULT '',
             created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    // Superadmins: rol global separado de `users.role` (admin de grupo).
+    // Tabla propia para no reconstruir users con CHECK y romper FKs.
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS superadmins (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            created_by TEXT NOT NULL DEFAULT 'env-bootstrap'
         )
     `);
 
@@ -182,6 +210,15 @@ async function initDB() {
     } catch (e) {
         if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
             console.log('[DB] Columna global_role puede que ya exista');
+        }
+    }
+    // Origen del alta. No se adivina en cuentas viejas: quedan 'unknown'.
+    try {
+        await db.execute('ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT \'unknown\'');
+        console.log('[DB] Columna auth_provider agregada a users');
+    } catch (e) {
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna auth_provider puede que ya exista');
         }
     }
 
@@ -337,6 +374,10 @@ async function initDB() {
         }
     }
 
+    // Bootstrap del superadmin: solo si la ENV existe y el usuario ya está cargado.
+    // Si se registra más tarde, el handler de /api/register vuelve a intentarlo.
+    await bootstrapSuperadmin(process.env.SUPERADMIN_USERNAME);
+
     console.log('[DB] Tablas inicializadas: users, sessions, groups, group_members, group_expenses, group_splits, group_payments, expenses, expense_splits');
 }
 
@@ -345,3 +386,4 @@ initDB().catch(err => {
 });
 
 module.exports = db;
+module.exports.bootstrapSuperadmin = bootstrapSuperadmin;

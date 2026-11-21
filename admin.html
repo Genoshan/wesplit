@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="darkreader-lock">
+    <meta name="app-version" content="1.0.0">
+    <title>WeSplit — Administración</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-body">
+    <div class="container py-4">
+        <div id="admin-gate" class="login-card mx-auto">
+            <div class="section-heading">
+                <p class="eyebrow">WeSplit</p>
+                <h1>Backoffice</h1>
+            </div>
+            <p id="admin-gate-msg" class="text-muted" role="status">Verificando acceso…</p>
+            <a href="/" class="btn btn-outline-secondary btn-sm">Volver a la app</a>
+        </div>
+
+        <main id="admin-content" hidden>
+            <header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                <div>
+                    <p class="eyebrow mb-1">WeSplit</p>
+                    <h1 class="h3 mb-0">Backoffice</h1>
+                    <p class="small text-muted mb-0">Métricas agregadas. Sin datos personales ni acceso directo a la base.</p>
+                </div>
+                <a href="/" class="btn btn-sm btn-outline-secondary">← Volver a la app</a>
+            </header>
+
+            <div id="admin-error" class="alert alert-danger" hidden role="alert"></div>
+
+            <section class="mb-4">
+                <h2 class="h6 text-uppercase text-muted">Totales</h2>
+                <div id="admin-totals" class="row g-3"></div>
+            </section>
+
+            <div class="row g-4">
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Altas por día (14 días)</h2>
+                    <div id="admin-signups" class="table-responsive"></div>
+                </section>
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Origen de las cuentas</h2>
+                    <div id="admin-providers" class="table-responsive"></div>
+                </section>
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Grupos creados (14 días)</h2>
+                    <div id="admin-groups" class="table-responsive"></div>
+                </section>
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Actividad (14 días)</h2>
+                    <div id="admin-activity" class="table-responsive"></div>
+                </section>
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Primer gasto y retención</h2>
+                    <div id="admin-conversion"></div>
+                </section>
+                <section class="col-md-6">
+                    <h2 class="h6 text-uppercase text-muted">Volumen por moneda</h2>
+                    <div id="admin-currencies" class="table-responsive"></div>
+                </section>
+            </div>
+
+            <p id="admin-note" class="small text-muted mt-4 mb-0"></p>
+            <p id="admin-generated" class="small text-muted mb-0"></p>
+        </main>
+    </div>
+    <script src="admin.js"></script>
+</body>
+</html>

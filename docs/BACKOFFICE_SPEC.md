@@ -1,8 +1,12 @@
 # Especificación — Backoffice de WeSplit
 
-> Estado: **propuesta para aprobación**. Rama: `docs/backoffice-spec`. Sin PR ni implementación aún.
+> Estado: **Fase 1 implementada y testeada localmente** (rama `feat/admin-phase1`). Fases 2–4 pendientes.
 > Decisiones confirmadas por el usuario (2026-11-21): bootstrap por ENV, misma SPA en `/admin`,
 > métricas agregadas + administración de usuarios/sesiones/recursos + auditoría.
+>
+> Nota de implementación: el backoffice vive en una página dedicada `/admin` servida por el mismo
+> servidor y con el mismo `style.css`/tema que la app. Así se evita mezclar archivos con el PR de copy.
+> El enlace `📊 Backoffice` solo se inyecta en el menú del usuario si `/api/admin/me` confirma el rol.
 
 ## 1. Principios
 
@@ -105,6 +109,16 @@ Todas se devuelven ya agregadas. Ningún endpoint de métricas devuelve filas de
    - Borrados con motivo; cada acción aparece en `/api/admin/audit`.
 4. **Fase 4 — Refuerzos**
    - 2FA, exportes y alertas (si se decide).
+
+## Verificación local de la Fase 1 (2026-11-21)
+
+- Servidor en `PORT=4002` apuntando a una BD **local descartable** (`TURSO_DATABASE_URL=file:admin-test.db`), sin tocar la BD remota ni leer secretos.
+- `SUPERADMIN_USERNAME=adminqa`: bootstrap al registrar y al reiniciar → `/api/admin/me` devuelve `superadmin:true`.
+- Usuario normal: `/me` → `false`, `/overview` → **403**; sin sesión → **401**; `/admin` → 200 (la página es pública, el control está en la API).
+- `/api/admin/overview` devolvió métricas reales: 4 usuarios, 3 grupos, 2 gastos, 1 pago; altas, origen (`manual`/`unknown`), actividad diaria, montos por moneda, primer gasto (25%) y retención.
+- UI verificada en navegador: tarjetas y tablas, enlace solo para superadmin, usuario normal ve "restringida a superadmins", tema `splitwise-dark` respetado en `/admin`.
+- `npm test` con `BASE_URL=http://localhost:4002` → **29/29 tests**, 4 suites (se agregó `tests/admin.int.test.js`).
+- `node --check` y `git diff --check` limpios.
 
 ## 8. Decisiones por defecto propuestas
 
