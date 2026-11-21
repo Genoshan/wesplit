@@ -135,6 +135,11 @@ body {
     flex-wrap: wrap;
 }
 
+.theme-toggle-btn {
+    min-width: 38px;
+    line-height: 1;
+}
+
 .current-group-badge {
     font-size: 0.85rem;
     color: var(--text-secondary);

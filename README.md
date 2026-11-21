@@ -2,7 +2,7 @@
 
 Gastos compartidos con grupos dinámicos: N miembros por grupo, moneda única, reparto exacto en centavos, balances por miembro, invitaciones con aceptación y baja lógica de participantes.
 
-> Estado al 2026-11-21: PR [#19](https://github.com/Genoshan/wesplit/pull/19) mergeado en `main` (`a43c216`). Fix de tema en `fix/theme-toggle`. Sin `push` ni PR automatizados sin autorización explícita.
+> Estado al 2026-11-21: PRs [#19](https://github.com/Genoshan/wesplit/pull/19) y [#20](https://github.com/Genoshan/wesplit/pull/20) mergeados en `main`. Botón de tema ícono en `ui/theme-button`. Sin `push` ni PR automatizados sin autorización explícita.
 
 ## Ejecutar
 

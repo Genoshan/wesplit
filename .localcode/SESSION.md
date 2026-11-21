@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-21
-- **Rama**: `fix/theme-toggle` desde `main` (`a43c216`). PR #19 (`feature/dynamic-groups` → `main`) mergeado.
+- **Rama**: `ui/theme-button` desde `main` (`76bd19c`). PRs #19 y #20 mergeados.
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -48,12 +48,13 @@
 - Smoke API con cuentas ficticias: invitación pendiente → aceptación → gasto → edición → baja → balance con inactivo → reactivación → borrado de cuentas. Todo OK.
 - UI en navegador: crear grupo, invitar, aceptar desde otra sesión, reparto N con suma validada, desglose y edición. Sin errores de consola. Cuentas de prueba eliminadas.
 - Merge de `origin/main`: pagos, CSV y filtro por fechas portados al modelo group-scoped. `npx jest tests/payment.int.test.js`: 9/9. Smoke UI con cuentas ficticias (alta, listado, baja, balances y sin errores de consola). Cuentas limpiadas.
-- Fix de tema: toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
+- Fix de tema (#20): toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
+- Botón de tema como ícono (🌙/☀️), fuera del dropdown de usuario y al lado de `+ Grupo`; verificado en navegador.
 
 ## Próximos pasos
 
-1. PR #19 ya mergeado en `main`.
-2. Mergear el PR de `fix/theme-toggle` y confirmar que el deploy sirve el nuevo tema.
+1. PRs #19 y #20 ya mergeados en `main`.
+2. Mergear el PR de `ui/theme-button` y confirmar que el deploy sirve el botón ícono.
 
 ## Restricciones vigentes
 

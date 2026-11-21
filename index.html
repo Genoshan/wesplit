@@ -76,6 +76,7 @@
             <div class="header-actions">
                 <select id="group-selector" class="form-select form-select-sm" aria-label="Seleccionar grupo"></select>
                 <button id="new-group-btn" class="btn btn-sm btn-primary" title="Crear nuevo grupo">+ Grupo</button>
+                <button id="toggle-theme-btn" class="btn btn-sm btn-outline-secondary theme-toggle-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro">🌙</button>
                 <button id="invitations-btn" class="btn btn-sm btn-outline-warning" hidden>Invitaciones <span id="invitations-count" class="badge bg-warning text-dark">0</span></button>
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -83,7 +84,6 @@
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><button class="dropdown-item" id="profile-btn">⚙️ Mi perfil</button></li>
-                        <li><button class="dropdown-item" id="toggle-theme-btn">🌙 Modo oscuro</button></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><button class="dropdown-item text-danger" id="delete-group-menu-btn" hidden>🗑️ Eliminar grupo actual</button></li>
                         <li><button class="dropdown-item text-danger" id="logout-btn">🚪 Salir</button></li>

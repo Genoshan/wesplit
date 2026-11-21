@@ -79,8 +79,10 @@ function updateThemeToggle(theme) {
     const btn = document.getElementById('toggle-theme-btn');
     if (!btn) return;
     const isDark = theme === 'splitwise-dark';
-    btn.textContent = isDark ? '☀️ Modo claro' : '🌙 Modo oscuro';
-    btn.title = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+    const label = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+    btn.textContent = isDark ? '☀️' : '🌙';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
 }
 
 function currencyDecimals(code) {

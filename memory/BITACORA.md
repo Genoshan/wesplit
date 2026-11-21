@@ -328,5 +328,22 @@ Cada entrada debe seguir este formato:
 - En navegador: claro `rgb(247,248,250)` ↔ oscuro `rgb(26,29,33)`, etiqueta y título del botón cambian correctamente.
 
 ### Estado final
-- Rama `fix/theme-toggle` creada desde `main` (`a43c216`), lista para PR.
-- Si el usuario sigue viendo los temas viejos, es el deploy/cache: debe refrescarse después de mergear este fix.
+- PR #20 mergeado: https://github.com/Genoshan/wesplit/pull/20 — merge commit `76bd19c`.
+- El usuario reportó que en el deploy seguía sin cambiar el ícono: síntoma del código previo a #20, así que el deploy aún no había tomado el fix.
+
+## [2026-11-21] Botón de tema como ícono, fuera del dropdown
+
+### Contexto
+- El usuario pidió que el control sea solo 🌙 en claro / ☀️ en oscuro, y que esté en la barra de acciones al lado de `+ Grupo`, no dentro del menú de usuario.
+
+### Cambios realizados
+- `index.html`: `toggle-theme-btn` movido fuera del dropdown, después de `new-group-btn`; eliminada la entrada del menú.
+- `app.js`: `updateThemeToggle()` deja solo el emoji y actualiza `title`/`aria-label`.
+- `style.css`: `.theme-toggle-btn` con `min-width` para evitar saltos de layout.
+
+### Verificación
+- `node --check app.js` limpio; IDs únicos en `index.html`.
+- En navegador: botón al lado de `+ Grupo`, fuera del dropdown; clic cambia 🌙 → ☀️, fondo `rgb(247,248,250)` ↔ `rgb(26,29,33)` y vuelve a 🌙. Cuenta de prueba eliminada.
+
+### Estado final
+- Rama `ui/theme-button` creada desde `main` (`76bd19c`), lista para PR. Requiere que el deploy se reconstruya para verse en producción.
