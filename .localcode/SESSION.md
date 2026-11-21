@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-20
-- **Rama**: `feature/dynamic-groups` (commit `db8b96d` + merge de `origin/main` en curso/resuelto). PR final a `main` pendiente de autorización.
+- **Rama**: `feature/dynamic-groups` (merge `fd7fca7` de `origin/main`). PR [#19](https://github.com/Genoshan/wesplit/pull/19) abierto hacia `main`.
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -52,7 +52,7 @@
 ## Próximos pasos
 
 1. Revisar el diff final del merge vs `origin/main` y confirmar el merge commit.
-2. Push de `feature/dynamic-groups`; el usuario crea el PR a `main`.
+2. PR #19 creado y pusheado; queda esperar review/merge en GitHub.
 
 ## Restricciones vigentes
 

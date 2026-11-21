@@ -285,7 +285,7 @@ Cada entrada debe seguir este formato:
 ## [2026-11-20] Lote S + lote M — cierre funcional de grupos dinámicos
 
 ### Contexto
-- Rama `feature/dynamic-groups` con 33 commits locales y cambios sin commitear; PR a `main` pendiente de autorización.
+- Rama `feature/dynamic-groups` con merge de `origin/main` pusheado (`fd7fca7`); PR #19 abierto hacia `main`.
 - Auditoría de uso (`plans/audit-uso-resultado.md`) había dejado hallazgos H1–H10 con distintos estados.
 
 ### Cambios realizados
@@ -310,4 +310,4 @@ Cada entrada debe seguir este formato:
 - Revisar el diff completo vs `origin/main` antes de autorizar `add`/`commit`/`push`/PR.
 - No leer valores de `server/.env`; dejar intactos los hallazgos ALTO de secretos en logs.
 - Merge de `origin/main` resuelto conservando la arquitectura group-scoped: se portaron pagos, CSV y filtro de fechas; tests 9/9 y smoke UI OK; queda `git add`, merge commit y push autorizados.
-- PR final lo crea el usuario en GitHub (`feature/dynamic-groups` → `main`).
+- PR #19 creado con GitHub CLI a pedido del usuario (la web no permitía crear el PR): https://github.com/Genoshan/wesplit/pull/19 — `MERGEABLE`, 31 archivos, +4604/-3036.
