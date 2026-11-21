@@ -1461,5 +1461,21 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.submitPayment = submitPayment;
+
+// Enlace al backoffice: solo se crea si el servidor confirma rol superadmin.
+// Va acá aparte para no mezclarse con el init principal de la app.
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/admin/me', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(info => {
+            if (!info?.superadmin) return;
+            const menu = document.querySelector('.app-header .dropdown-menu-end');
+            if (!menu || document.getElementById('admin-link')) return;
+            const item = document.createElement('li');
+            item.innerHTML = '<a class="dropdown-item" id="admin-link" href="/admin">📊 Backoffice</a>';
+            menu.prepend(item);
+        })
+        .catch(() => { /* sin backoffice visible es un estado válido */ });
+});
 window.deletePayment = deletePayment;
 window.exportToCsv = exportToCsv;

@@ -46,6 +46,7 @@ const path = require('path');
 const db = require('./database');
 const { authMiddleware, login, logout, getUser, getUserGroups, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions, parseCookies } = require('./auth');
 const groupsRouter = require('./groups');
+const adminRouter = require('./admin');
 const { hashPassword, verifyValue, needsRehash, validatePassword } = require('./password');
 
 const app = express();
@@ -118,9 +119,12 @@ app.use('/api', apiLimiter);
 // Grupos API
 app.use('/api/groups', groupsRouter);
 
+// Backoffice API (auth + superadmin dentro del router)
+app.use('/api/admin', adminRouter);
+
 // Servir únicamente los archivos del front-end. El resto del repo (server/,
 // scripts/, memory/, .env, etc.) nunca debe ser accesible por HTTP.
-const PUBLIC_ASSETS = new Set(['/index.html', '/style.css', '/app.js', '/favicon.ico']);
+const PUBLIC_ASSETS = new Set(['/index.html', '/style.css', '/app.js', '/admin', '/admin.html', '/admin.js', '/favicon.ico']);
 app.use((req, res, next) => {
     if (req.path.startsWith('/api/') || req.path === '/') return next();
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -131,6 +135,10 @@ app.use(express.static(path.join(__dirname, '..'), { index: false, dotfiles: 'ig
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
+});
+
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, '../admin.html'));
 });
 
 // Auth endpoints (no requieren autenticación)
@@ -166,8 +174,8 @@ app.post('/api/register', authActionLimiter, async (req, res) => {
         const passwordHash = await hashPassword(password);
 
         const insertResult = await db.execute({
-            sql: 'INSERT INTO users (username, password_hash, global_role, email, name) VALUES (?, ?, ?, ?, ?)',
-            args: [cleanUsername, passwordHash, 'member', cleanEmail || null, cleanName || cleanUsername]
+            sql: 'INSERT INTO users (username, password_hash, global_role, email, name, auth_provider) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [cleanUsername, passwordHash, 'member', cleanEmail || null, cleanName || cleanUsername, 'manual']
         });
 
         const userId = insertResult.lastInsertRowid;
@@ -182,6 +190,10 @@ app.post('/api/register', authActionLimiter, async (req, res) => {
             sql: 'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
             args: [groupId, userId, 'admin']
         });
+
+        // Si este username es el configurado en SUPERADMIN_USERNAME, se promueve acá
+        // para no tener que reiniciar el servidor después de crearlo.
+        await db.bootstrapSuperadmin(cleanUsername);
 
         console.log(`[REGISTER] Usuario creado: ${cleanUsername} (ID: ${userId}), grupo Mis gastos (ID: ${groupId})`);
         res.json({ message: 'Usuario creado con éxito', username: cleanUsername });
