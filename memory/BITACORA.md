@@ -367,5 +367,7 @@ Cada entrada debe seguir este formato:
 - PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto (`ui/theme-button` → `main`) con el botón ícono y el rediseño claro; pendiente de merge y deploy.
 
 ### Seguimiento: fondo claro se veía oscuro en el navegador del usuario
-- Capturas mostraron acentos azules (CSS nuevo aplicado) pero fondo/cards oscuros: firma de auto-dark del navegador (Chrome/Edge `#enable-force-dark` o extensión tipo Dark Reader), no del CSS.
-- Se agregó `color-scheme: only light` al bloque claro y `only dark` al oscuro para que el UA no oscurezca el tema claro. Verificado: claro `color-scheme: light only`, body `rgb(255,255,255)`; oscuro `dark only`.
+- Capturas mostraron acentos azules (CSS nuevo aplicado) pero fondo/cards oscuros: firma de auto-dark del navegador, no del CSS.
+- **Confirmado**: al abrir Dribbble en el navegador del usuario, el DOM trae `data-darkreader-inline-bgcolor` → tiene la extensión **Dark Reader** activa. Esa extensión oscurece el tema claro.
+- Se agregó `color-scheme: only light` al bloque claro y `only dark` al oscuro.
+- Se agregó `<meta name="darkreader-lock">` en `index.html` para que Dark Reader no procese la app (la app ya tiene su propio toggle claro/oscuro).
