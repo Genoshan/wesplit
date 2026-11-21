@@ -1,6 +1,6 @@
 // Integración: pagos group-scoped (settle up). Usa cuentas ficticias creadas
 // en el propio test y las elimina al final. No depende de datos ni secretos locales.
-const BASE_URL = 'http://localhost:4000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
 const PASSWORD = 'TestPayment12345!';
 const SUFFIX = Date.now();
 

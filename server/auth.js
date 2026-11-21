@@ -25,10 +25,18 @@ function parseCookies(header) {
 // Auth: credenciales desde DB (con fallback a legacy)
 // ────────────────────────────────────────
 
-async function findUser(username) {
+async function findUser(identifier) {
+    // El registro guarda el username en minúsculas. Normalizar evita que un
+    // login con mayúsculas falle, y el mismo campo acepta también el email
+    // (Google ya buscaba por email, de ahí la diferencia de comportamiento).
+    const normalized = String(identifier || '').trim().toLowerCase();
+    if (!normalized) return null;
     // Propagar errores de DB: antes se devolvía null ante CUALQUIER fallo, lo
     // que activaba el fallback legacy y podía crear una sesión admin sin DB.
-    const result = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
+    let result = await db.execute('SELECT * FROM users WHERE username = ?', [normalized]);
+    if (result.rows.length === 0 && normalized.includes('@')) {
+        result = await db.execute('SELECT * FROM users WHERE LOWER(email) = ?', [normalized]);
+    }
     return result.rows.length > 0 ? result.rows[0] : null;
 }
 

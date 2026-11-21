@@ -46,7 +46,7 @@ const path = require('path');
 const db = require('./database');
 const { authMiddleware, login, logout, getUser, getUserGroups, initGoogleAuth, handleGoogleCallback, cleanGoogleSessions, parseCookies } = require('./auth');
 const groupsRouter = require('./groups');
-const { hashPassword, verifyValue, needsRehash } = require('./password');
+const { hashPassword, verifyValue, needsRehash, validatePassword } = require('./password');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -144,8 +144,9 @@ app.post('/api/register', authActionLimiter, async (req, res) => {
     if (!cleanUsername || cleanUsername.length < 3) {
         return res.status(400).json({ error: 'El username debe tener al menos 3 caracteres' });
     }
-    if (!password || password.length < 12) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 12 caracteres' });
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+        return res.status(400).json({ error: passwordError });
     }
     if (!cleanEmail || !cleanEmail.includes('@')) {
         return res.status(400).json({ error: 'El email es obligatorio y debe ser válido' });
@@ -250,8 +251,9 @@ app.put('/api/profile', authActionLimiter, async (req, res) => {
             await db.execute('UPDATE users SET email = ? WHERE id = ?', [cleanEmail, user.id]);
         }
         if (password) {
-            if (password.length < 12) {
-                return res.status(400).json({ error: 'La contraseña debe tener al menos 12 caracteres' });
+            const passwordError = validatePassword(password);
+            if (passwordError) {
+                return res.status(400).json({ error: passwordError });
             }
             const passwordHash = await hashPassword(password);
             await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);

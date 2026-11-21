@@ -20,8 +20,8 @@
                 <h1>Iniciar Sesión</h1>
             </div>
             <form id="login-form">
-                <label for="login-username">Usuario</label>
-                <input type="text" id="login-username" class="form-control" placeholder="Tu username" autocomplete="username" required>
+                <label for="login-username">Usuario o email</label>
+                <input type="text" id="login-username" class="form-control" placeholder="Tu username o email" autocomplete="username" required>
                 <label for="login-password">Contraseña</label>
                 <input type="password" id="login-password" class="form-control" placeholder="Contraseña" required>
                 <p id="login-error" class="text-danger small" role="status"></p>
@@ -45,7 +45,8 @@
                             <label for="reg-username">Username</label>
                             <input type="text" id="reg-username" class="form-control mb-3" placeholder="Ej. juan" required>
                             <label for="reg-password">Contraseña</label>
-                            <input type="password" id="reg-password" class="form-control mb-3" placeholder="Mínimo 12 caracteres" required>
+                            <input type="password" id="reg-password" class="form-control mb-3" placeholder="Mínimo 8: letra, número y símbolo" minlength="8" required>
+                            <div class="form-text mt-n2 mb-3">Al menos 8 caracteres, con una letra, un número y un símbolo (ej. <code>Abcdef1!</code>).</div>
                             <label for="reg-email">Email</label>
                             <input type="email" id="reg-email" class="form-control" placeholder="tu@email.com" required>
                         </div>
@@ -412,7 +413,7 @@
                     <label for="profile-email">Email</label>
                     <input type="email" id="profile-email" class="form-control mb-3" placeholder="tu@email.com">
                     <label for="profile-password">Nueva contraseña (opcional)</label>
-                    <input type="password" id="profile-password" class="form-control mb-3" placeholder="Dejar vacío para no cambiar">
+                    <input type="password" id="profile-password" class="form-control mb-3" placeholder="Vacío = no cambiar; mín. 8 con letra, número y símbolo" minlength="8">
                     <hr>
                     <button type="button" class="btn btn-sm btn-outline-danger w-100" id="delete-account-btn">🗑️ Eliminar mi cuenta</button>
                 </div>
