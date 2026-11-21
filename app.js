@@ -76,10 +76,11 @@ function toggleTheme() {
 }
 
 function updateThemeToggle(theme) {
-    const btn = document.getElementById('theme-toggle');
+    const btn = document.getElementById('toggle-theme-btn');
     if (!btn) return;
-    btn.textContent = theme === 'splitwise-dark' ? '🌙' : '☀️';
-    btn.title = theme === 'splitwise-dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+    const isDark = theme === 'splitwise-dark';
+    btn.textContent = isDark ? '☀️ Modo claro' : '🌙 Modo oscuro';
+    btn.title = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
 }
 
 function currencyDecimals(code) {

@@ -20,24 +20,6 @@
     --owe-color: #ff652f;
 }
 
-/* (removed) */
-[data-bs-theme="github-disabled"] {
-    --bs-body-bg: #f3f5f7;
-    --bs-body-color: #1f2933;
-    --bs-border-color: #d9e1e8;
-    --border-color: var(--bs-border-color);
-    --bs-primary: #1769aa;
-    --bs-success: #257a4f;
-    
-    --card-bg: #ffffff;
-    --text-primary: #1f2933;
-    --text-secondary: #697386;
-    --accent-color: #1769aa;
-    --accent-strong: #0f4c81;
-    --soft-panel: #edf4f8;
-    --success-color: #257a4f;
-}
-
 /* Splitwise Dark */
 [data-bs-theme="splitwise-dark"] {
     --bs-body-bg: #1a1d21;
@@ -82,57 +64,6 @@
     border-bottom-color: var(--accent-color);
     background: transparent;
     font-weight: 600;
-}
-
-/* Fix Bootstrap table colors in dark themes */
-[data-bs-theme="dracula"] .table,
-[data-bs-theme="nord"] .table {
-    --bs-table-color: var(--text-primary);
-    --bs-table-bg: transparent;
-    --bs-table-border-color: var(--border-color);
-}
-
-/* Fix Bootstrap card and form in dark themes */
-[data-bs-theme="dracula"] .card,
-[data-bs-theme="nord"] .card {
-    --bs-card-bg: var(--card-bg);
-    --bs-card-color: var(--text-primary);
-    --bs-card-border-color: var(--border-color);
-}
-
-[data-bs-theme="dracula"] .form-control,
-[data-bs-theme="dracula"] .form-select,
-[data-bs-theme="nord"] .form-control,
-[data-bs-theme="nord"] .form-select {
-    background: var(--card-bg);
-    color: var(--text-primary);
-    border-color: var(--border-color);
-}
-
-[data-bs-theme="dracula"] .form-control::placeholder,
-[data-bs-theme="nord"] .form-control::placeholder {
-    color: var(--text-secondary);
-    opacity: 1;
-}
-
-[data-bs-theme="dracula"] label,
-[data-bs-theme="nord"] label {
-    color: var(--text-secondary);
-}
-
-[data-bs-theme="dracula"] .btn-action,
-[data-bs-theme="nord"] .btn-action {
-    color: #fff;
-}
-
-[data-bs-theme="dracula"] .form-feedback,
-[data-bs-theme="nord"] .form-feedback {
-    color: var(--text-secondary);
-}
-
-[data-bs-theme="dracula"] .form-feedback.is-success,
-[data-bs-theme="nord"] .form-feedback.is-success {
-    color: var(--success-color);
 }
 
 html,
@@ -211,11 +142,6 @@ body {
     padding: 4px 10px;
     border-radius: 12px;
     margin-left: 8px;
-}
-
-.theme-select {
-    min-width: 120px;
-    cursor: pointer;
 }
 
 .eyebrow {
@@ -725,15 +651,13 @@ body {
     align-items: center;
 }
 
-[data-bs-theme="dracula"] .btn-google,
-[data-bs-theme="nord"] .btn-google {
+[data-bs-theme="splitwise-dark"] .btn-google {
     background: var(--card-bg);
     color: var(--text-primary);
     border-color: var(--border-color);
 }
 
-[data-bs-theme="dracula"] .btn-google:hover,
-[data-bs-theme="nord"] .btn-google:hover {
+[data-bs-theme="splitwise-dark"] .btn-google:hover {
     background-color: var(--soft-panel);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
@@ -754,10 +678,6 @@ body {
     .header-actions {
         flex-wrap: wrap;
         gap: 8px;
-    }
-
-    .theme-select {
-        min-width: unset;
     }
 
     .balance-panel {
