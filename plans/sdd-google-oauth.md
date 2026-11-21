@@ -1,5 +1,13 @@
 # SDD - Google OAuth Login
 
+> **Estado al 2026-11-20: IMPLEMENTADO CON DESVÍOS.** Este documento es el diseño original
+> (contexto de dos usuarios fijos, sesiones en memoria y allowlist) y **ya no describe el código actual**.
+> Implementación real: auto-registro de cualquier cuenta con email verificado, sesiones persistentes
+> en SQLite, `GOOGLE_AUTHORIZED_EMAILS` en modo fail-open cuando la variable está ausente (fail-closed
+> si existe vacía), `/api/google/config` y `/api/google/init`, y grupo personal "Mis gastos" creado
+> al registrar. El flujo completo depende de que la pantalla de consentimiento de Google esté
+> publicada o de que la cuenta de prueba esté configurada. No se agregó backoffice ni cupo de cuentas.
+
 ## 1. Objetivo
 
 Agregar autenticacion con Google OAuth como metodo secundario de login al formulario existente, manteniendo el login con contraseña como fallback. El objetivo es simplificar el acceso para Tin y Noe sin eliminar el sistema actual.
@@ -145,6 +153,11 @@ document.getElementById('google-login-btn')?.addEventListener('click', loginWith
 | `GOOGLE_CLIENT_SECRET` | Client Secret de Google OAuth | `GOCSPX-xxxxx_yyyyy` |
 | `GOOGLE_AUTHORIZED_EMAILS` | Emails permitidos (comma-separated) | `tin@ejemplo.com,noe@ejemplo.com` |
 | `GOOGLE_REDIRECT_URI` | URI de callback (opcional, por defecto auto-detect) | `http://localhost:4000/api/google/callback` |
+
+Semantics de `GOOGLE_AUTHORIZED_EMAILS`:
+- Si la variable **no existe**: se permite cualquier email verificado (comportamiento legacy).
+- Si la variable **existe** (incluso vacía): se aplica la lista; vacia = nadie puede entrar por Google.
+- Los emails se comparan en lowercase, sin espacios; se separan por coma.
 
 ## 6. Configuracion en Google Cloud Console
 

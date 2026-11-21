@@ -1,20 +1,33 @@
-# Backlog de Mejoras - Proyecto Reloj
+# Backlog de Mejoras - wesplit
 
-Este archivo contiene las tareas y mejoras identificadas durante la auditoría del proyecto que se implementarán en fases futuras para mejorar la robustez, experiencia de usuario y calidad del código.
+Estado al 2026-11-20. Los ítems resueltos se conservan marcados para no reabrirlos por accidente.
 
-## 🚀 Prioridad Alta (Robustez y Corrección)
-- [ ] **Validación de Datos en Frontend:** Implementar validaciones antes de enviar el formulario (ej. verificar que el monto sea mayor a cero y que los campos no estén vacíos).
-- [ ] **Limpieza de Entradas (Backend):** Aplicar `.trim()` a las descripciones para evitar espacios en blanco accidentales en la base de datos.
-- [ ] **Validación de Rango:** Asegurar en el backend que el monto sea un número positivo antes de procesarlo.
+## ✅ Resueltos
 
-## ✨ Mejoras de Experiencia (UX/UI)
-- [ ] **Feedback Visual Mejorado:** Reemplazar los `alert()` por notificaciones visuales integradas en la interfaz para una experiencia más fluida.
-- [ ] **Manejo de Estado de Carga:** Añadir un indicador de "Cargando..." mientras el servidor procesa la solicitud del usuario.
+- [x] Validación de monto positivo y `min="0.01"` en el formulario; validación en backend.
+- [x] `trim()` y normalización de username en invitaciones; búsqueda con sugerencias.
+- [x] Reemplazo de `alert()` por SweetAlert2 y `aria-live` en resultados de invitación.
+- [x] Guard de último admin activo al dar de baja miembros.
+- [x] Eliminación física de gastos con limpieza explícita de `group_splits`.
+- [x] Desglose de splits en el historial y reparto exacto para N miembros.
+- [x] Edición de gastos con modal y `PUT /api/groups/:id/expenses/:expenseId`.
+- [x] Aceptación de invitaciones (`pending`/`active`) y baja lógica (`inactive`).
+- [x] Filtros rotulados como "solo historial"; balances y gráfico "todos los períodos".
+- [x] CSP + SRI, escapeo de HTML, rate limits y protección de IDOR.
+- [x] Historial con filtros, resumen de deudas y estados vacíos.
+- [x] Pagos entre miembros del grupo (settle up) con descuento en balances e historial.
+- [x] Filtro por rango de fechas y exportación CSV del grupo.
 
-## 🛠️ Refactorización y Mantenimiento
-- [ ] **Consistencia de Codificación:** Asegurar que todos los caracteres especiales (como símbolos de moneda o grados) utilicen entidades HTML para evitar problemas en diferentes navegadores.
-- [ ] **Refactorización de Mensajes:** Limpiar las cadenas de texto en el backend para eliminar errores de codificación y mejorar la legibilidad del log.
+## 🟡 Pendiente / diferido
 
-## 💡 Ideas Futuras
-- [ ] Implementar un historial visual de gastos con filtros por fecha o categoría.
-- [ ] Añadir una sección de "Resumen" que muestre cuánto debe cada persona automáticamente.
+- [ ] **Backoffice**: administración de `global_role` y cuentas.
+- [ ] **Gráfico temporal** y comparativa mes a mes.
+- [ ] **Indicador de carga** en acciones lentas del formulario y de invitaciones.
+- [ ] **2FA** y notificaciones por email.
+
+## ⚪ Descartado (no reabrir sin nueva decisión)
+
+- Gastos recurrentes: eliminados por completo (API, tabla, CSS y docs).
+- Tasas de cambio y multimoneda por gasto: se usa moneda única por grupo.
+- Link de invitación con token: se conserva invitación por username con aceptación en la app.
+- Cupo de cuentas / allowlist de Google: registro manual y Google siguen abiertos.

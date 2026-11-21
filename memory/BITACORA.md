@@ -279,3 +279,35 @@ Cada entrada debe seguir este formato:
 - Considerar actualizar versión automáticamente con git tags (v0.1.0, v0.2.0, etc.)
 - Pipeline de Render debería trigger con push a main
 - Crear PR para mergear esta feature
+
+---
+
+## [2026-11-20] Lote S + lote M — cierre funcional de grupos dinámicos
+
+### Contexto
+- Rama `feature/dynamic-groups` con 33 commits locales y cambios sin commitear; PR a `main` pendiente de autorización.
+- Auditoría de uso (`plans/audit-uso-resultado.md`) había dejado hallazgos H1–H10 con distintos estados.
+
+### Cambios realizados
+- **Lote S**: recurrentes eliminados; moneda única por grupo; borrado de gasto con limpieza de `group_splits`; guard de último admin; invitación normalizada con `GET /api/users/search`; grupo "Mis gastos" (registro manual y Google) con migración única; UX/CSS (errores de selector, `min`, filtros rotulados, roles, doble request de balance).
+- **Lote M**: columna `status` en `group_members` (`active`/`pending`/`inactive`); invitaciones con aceptación/rechazo; baja lógica y reactivación; `PUT /api/groups/:id/expenses/:expenseId`; desglose de splits en historial; reparto exacto para N miembros; panel de invitaciones en la UI; limpieza de membresías huérfanas al borrar cuentas.
+- Documentación cerrada: `ROADMAP.md`, `TODO_BACKLOG.md`, `plans/sdd-google-oauth.md`, `plans/audit-uso-splitwise.md`, `plans/audit-uso-resultado.md`, `AGENTS.md`, `context/project.md`, `REQUIREMENTS.md`, `.localcode/SESSION.md`, `.localcode/DECISIONS.md`.
+- Servidor reiniciado en `http://localhost:4000` (`node index.js` desde `./server/`).
+
+### Decisiones tomadas
+- Un solo campo `status` para invitaciones y bajas, en vez de dos tablas o estados separados.
+- Los miembros inactivos siguen en balances porque tienen historial; los pendientes no.
+- Se descartó el link con token: la aceptación ocurre dentro de la app.
+- Settle up queda integrado en el modelo group-scoped (pagos con alta/baja/historial, descuento en balances, CSV y filtro por fechas); cotización diaria sigue diferida; backoffice no se implementa ahora.
+
+### Estado final
+- Smoke tests end-to-end con cuentas ficticias (API): invitación pendiente → aceptación → gasto → edición → baja → balance → reactivación → borrado de cuentas. Todo OK.
+- UI verificada en navegador: creación de grupo, invitación, aceptación desde la otra sesión, reparto N con suma validada, desglose y modal de edición. Sin errores de consola.
+- `node --check` limpio en `app.js`, `index.js`, `auth.js`, `database.js`, `groups.js`; `git diff --check` sin errores de whitespace.
+- Cierre de pendientes: logs trackeados redactados sin imprimir valores (`openclaw_debug_output.txt:21` y `server/server_out.txt`); roadmap duplicado archivado en `.claude/docs/archive/ROADMAP.md` con puntero; log vacío `server/err.txt` archivado en `server/archive/err.txt`; `README.md` convertido en índice de documentación.
+
+### Notas para próxima sesión
+- Revisar el diff completo vs `origin/main` antes de autorizar `add`/`commit`/`push`/PR.
+- No leer valores de `server/.env`; dejar intactos los hallazgos ALTO de secretos en logs.
+- Merge de `origin/main` resuelto conservando la arquitectura group-scoped: se portaron pagos, CSV y filtro de fechas; tests 9/9 y smoke UI OK; queda `git add`, merge commit y push autorizados.
+- PR final lo crea el usuario en GitHub (`feature/dynamic-groups` → `main`).

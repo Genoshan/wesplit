@@ -1,18 +1,62 @@
 # Current Session Status
-- **Current Task**: Mobile-first responsive audit + fixes
-- **Estado Actual**: 
-    1. ✅ 20 issues de responsividad identificados y corregidos
-    2. ✅ Chart height responsive (320px → 200px en mobile)
-    3. ✅ App-shell padding optimizado para mobile
-    4. ✅ Balance panel sin overflow en 320px
-    5. ✅ Form inputs font-size 16px (previene iOS keyboard zoom)
-    6. ✅ Summary grid breakpoints intermedios (480px, 360px)
-    7. ✅ Tabla con columnas ocultas progresivamente < 360px
-    8. ✅ Modal fullscreen en < 480px
-    9. ✅ Touch optimization + safe area insets para iPhone X+
-    10. ✅ Landscape mode media query
-    11. ✅ PR creado y pusheado a origin/feature/mobile-responsiveness
-- **Próximos Pasos**: 
-    - Revisar PR #13 y mergear a main
-    - Testing manual en dispositivos reales (iPhone, Android)
-- **Last Action Summary**: Commit y push de fixes mobile-first responsive — 20 issues resueltos
+
+- **Actualizado**: 2026-11-20
+- **Rama**: `feature/dynamic-groups` (commit `db8b96d` + merge de `origin/main` en curso/resuelto). PR final a `main` pendiente de autorización.
+- **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
+
+## Estado actual
+
+### Implementado
+- Grupos dinámicos con N miembros: alta, borrado, invitación y miembros con estados.
+- Autenticación: registro con username/email/password (mínimo 12, `bcryptjs` + rehash legacy) y Google OAuth (allowlist desactivada → cualquier email verificado).
+- Roles: `global_role` informativo sin backoffice; `role` por grupo (admin/member) independiente.
+- Frontend: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI + CSP; sin handlers inline.
+- Pagadores y splits desde miembros reales; `evenSplits()` reparte centavos exactos entre N.
+- Seguridad: rate limits, IDOR fixes, seed one-shot, `TRUST_PROXY`/`ALLOWED_ORIGINS`.
+
+### Lote S (completo)
+1. Recurrentes eliminados (rutas, tabla, migración y CSS).
+2. Moneda única por grupo: tabla `currencies`, seed de tasas y endpoints eliminados; alta de gasto usa `base_currency`.
+3. Borrado de gasto con limpieza explícita de `group_splits` + 404 si no existe.
+4. Guard de último admin activo.
+5. Invitación normalizada (mayúsculas/espacios) y `GET /api/users/search?q=` con `<datalist>`.
+6. Grupo personal "Mis gastos" en registro manual y Google; migración `rename-personal-casa-v1`; default por `created_at ASC`.
+7. UX/CSS: `--border-color`, `#category-chart`, `min="0.01"`, filtros rotulados, roles en español, sin fallback 50/50, doble request de balance eliminado, `aria-live`.
+
+### Lote M (completo)
+1. `group_members.status` (`active`/`pending`/`inactive`) con migración automática.
+2. Invitaciones: `GET /api/groups/invitations`, `POST /:id/accept`, `DELETE /:id`; panel en la pestaña Miembros con badge en el header.
+3. Baja lógica de miembros + reactivación (`POST /:id/members/:userId/reactivate`); inactivos siguen en balances por su historial.
+4. `PUT /api/groups/:id/expenses/:expenseId` con recálculo de splits y moneda forzada del grupo.
+5. Modal de edición de gasto en el frontend.
+6. Reparto personalizado para N miembros con validación visual de suma en centavos.
+7. Desglose de splits por gasto en el historial (`<details>`).
+8. Limpieza de membresías huérfanas al borrar una cuenta (evita FK rota entre cuentas de un mismo grupo).
+
+### Eliminado
+- Endpoints legacy `/api/expenses`, `/api/expense/:id` (GET/POST/PUT/DELETE) y `resolveLegacyPayer`.
+- Recurrentes y tasas de cambio.
+
+### Pendiente diferido
+- ~~Settle up: sin UI~~ → integrado: pagos group-scoped (GET/POST/DELETE), balance descontado, historial y CSV.
+- Backoffice de `global_role`; cotización diaria vía API.
+
+## Verificación
+
+- `node --check` limpio en `app.js`, `index.js`, `auth.js`, `database.js`, `groups.js`.
+- `git diff --check` sin errores de whitespace (solo avisos LF→CRLF conocidos).
+- Smoke API con cuentas ficticias: invitación pendiente → aceptación → gasto → edición → baja → balance con inactivo → reactivación → borrado de cuentas. Todo OK.
+- UI en navegador: crear grupo, invitar, aceptar desde otra sesión, reparto N con suma validada, desglose y edición. Sin errores de consola. Cuentas de prueba eliminadas.
+- Merge de `origin/main`: pagos, CSV y filtro por fechas portados al modelo group-scoped. `npx jest tests/payment.int.test.js`: 9/9. Smoke UI con cuentas ficticias (alta, listado, baja, balances y sin errores de consola). Cuentas limpiadas.
+
+## Próximos pasos
+
+1. Revisar el diff final del merge vs `origin/main` y confirmar el merge commit.
+2. Push de `feature/dynamic-groups`; el usuario crea el PR a `main`.
+
+## Restricciones vigentes
+
+- Sin `git add`/`commit`/`push`/PR sin autorización explícita.
+- Sin leer ni reproducir valores de `server/.env`.
+- Los dos hallazgos ALTO de secretos en archivos de log se dejan intactos salvo autorización.
+- Sin cambios de dependencias, versiones o upgrade de OpenCode sin autorización.

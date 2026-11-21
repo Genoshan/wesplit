@@ -1,46 +1,59 @@
 # Diagrama de Flujo del Registro de Gastos
 
-Este documento describe el flujo de datos y la lógica para registrar un nuevo gasto en la aplicación "Reloj".
+> Actualizado al 2026-11-20. El flujo anterior usaba el endpoint legacy `/api/expense`, eliminado.
 
 ## Diagrama de Flujo (Mermaid)
 
 ```mermaid
 graph TD
-    A[Usuario abre la App] --> B[Formulario de Gasto]
-    B --> C{Entrada de Datos}
-    C --> D[Monto]
-    C --> E[Descripción]
-    C --> F[Seleccionar Pagador]
-    
-    F --> G[Botón 'Registrar']
-    G --> H[Función submitExpense en app.js]
-    
-    subgraph "Procesamiento Frontend"
-    H --> I[Validar campos y formato de fecha]
-    I --> J[Enviar petición POST a /api/expense]
+    A[Usuario logueado abre la App] --> B[Selecciona grupo activo]
+    B --> C[Formulario de Gasto]
+    C --> D{Entrada de Datos}
+    D --> E[Monto]
+    D --> F[Descripción y categoría]
+    D --> G[Seleccionar pagador entre miembros reales]
+    D --> H[Modo: equal / solo / custom]
+
+    G --> I[Botón 'Agregar gasto']
+    H --> I
+
+    subgraph "Procesamiento Frontend (app.js)"
+    I --> J[Validar campos y armar splits]
+    J --> K[POST /api/groups/:id/expenses]
     end
 
-    subgraph "Backend (server/index.js)"
-    J --> K{Validación en Servidor}
-    K -- Error --> L[Retornar error al cliente]
-    K -- Éxito --> M[Ejecutar Query SQL en database.js]
+    subgraph "Backend (server/groups.js)"
+    K --> L{Validación en Servidor}
+    L -- Error --> M[Retornar 400/403 al cliente]
+    L -- Éxito --> N[Resolver pagador contra miembros del grupo]
+    N --> O[evenSplits: reparto exacto en centavos entre N]
+    O --> P[(group_expenses + group_splits vía libSQL)]
     end
 
-    subgraph "Persistencia"
-    M --> N[(Base de Datos SQLite)]
-    end
-
-    N --> O[Confirmación: 'Gasto registrado con éxito']
-    O --> P[Actualizar lista visual en la pantalla]
+    P --> Q[Confirmación: 'Gasto registrado con éxito']
+    Q --> R[Recargar gastos, miembros y balances del grupo]
 ```
 
 ## Descripción del Flujo Detallado
 
-1.  **Interfaz de Usuario (UI):** El usuario interactúa con un formulario donde ingresa el monto, una descripción y selecciona quién realizó el pago a través de un menú desplegable (Tin o Noe).
-2.  **Captura de Datos:** Al presionar "Registrar", la función `submitExpense` en `app.js` recolecta los tres valores:
-    *   `amount`: El valor numérico del gasto.
-    *   `description`: Texto descriptivo.
-    *   `payer`: El nombre seleccionado (mapeado a 'me' o 'partner').
-3.  **Comunicación:** Se envía una petición `POST` al endpoint `/api/expense`.
-4.  **Validación y Almacenamiento:** El servidor valida los datos antes de insertarlos en la base de datos SQLite mediante `database.js`.
-5.  **Confirmación:** Una vez guardado, el sistema muestra un mensaje de éxito y actualiza la interfaz visual.
+1. **Interfaz de usuario**: el usuario elige el grupo activo (cada cuenta tiene su propia `Casa` y puede pertenecer a otras compartidas).
+2. **Captura de datos**: monto, descripción, categoría, fecha, pagador y modo de reparto. El selector de pagador se genera desde `currentGroupMembers` (`app.js:430-449`), no desde una lista fija de personas.
+3. **Comunicación**: se envía `POST /api/groups/:id/expenses` (`server/groups.js:389`), con el group ID en la URL. El grupo **no** se toma de un parámetro del body.
+4. **Validación en servidor**: monto > 0, fecha presente, pagador miembro del grupo, modo válido y suma de splits `custom` tolerada en 1 centavo (`server/groups.js:395-453`).
+5. **Reparto**: con `equal`, `evenSplits()` divide el total entre todos los miembros y distribuye el resto en centavos para que la suma sea exacta (`server/groups.js:53-62`). Con `solo`, la parte completa va al pagador. Con `custom`, se respetan los montos enviados.
+6. **Persistencia**: se insertan la fila en `group_expenses` y una fila por participante en `group_splits` usando libSQL (`@libsql/client`).
+7. **Confirmación**: se muestra el mensaje de éxito y se recargan la lista de gastos, los miembros y los balances del grupo.
+
+## Flujo de invitación (relacionado)
+
+Para que otro usuario aparezca como pagador posible, un admin del grupo debe invitarlo desde la pestaña Miembros con su username exacto:
+
+```mermaid
+graph LR
+    A[Admin: Invitar miembro] --> B[POST /api/groups/:id/members]
+    B --> C[Buscar usuario por username exacto]
+    C --> D[INSERT en group_members con role member]
+    D --> E[El invitado ve el grupo al loguearse]
+```
+
+La invitación no requiere aceptación y no envía notificación.

@@ -1,199 +1,149 @@
-const { createClient } = require('@libsql/client');
-
+// Integración: pagos group-scoped (settle up). Usa cuentas ficticias creadas
+// en el propio test y las elimina al final. No depende de datos ni secretos locales.
 const BASE_URL = 'http://localhost:4000';
-const DB_URL = process.env.TURSO_DATABASE_URL;
-const DB_TOKEN = process.env.TURSO_AUTH_TOKEN;
+const PASSWORD = 'TestPayment12345!';
+const SUFFIX = Date.now();
 
-let sessionToken;
+const users = {
+  owner: { username: `paytest${SUFFIX}a`, name: 'Pago Test Owner', email: `paytest${SUFFIX}a@example.invalid`, cookie: null },
+  member: { username: `paytest${SUFFIX}b`, name: 'Pago Test Member', email: `paytest${SUFFIX}b@example.invalid`, cookie: null }
+};
+let groupId;
+let createdPaymentId;
+
+function cookieOf(response) {
+  const setCookie = response.headers.get('set-cookie') || '';
+  return setCookie.match(/session_token=[^;]+/)?.[0] || '';
+}
+
+async function register(user) {
+  const res = await fetch(`${BASE_URL}/api/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user.username, password: PASSWORD, email: user.email, name: user.name })
+  });
+  if (!res.ok) throw new Error(`No se pudo registrar ${user.username}: ${res.status}`);
+}
+
+async function login(user) {
+  const res = await fetch(`${BASE_URL}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: user.username, password: PASSWORD })
+  });
+  if (!res.ok) throw new Error(`No se pudo loguear ${user.username}: ${res.status}`);
+  user.cookie = cookieOf(res);
+}
+
+function opts(user, method, body) {
+  const headers = { Cookie: user.cookie };
+  if (body) headers['Content-Type'] = 'application/json';
+  return { method, headers, body: body ? JSON.stringify(body) : undefined };
+}
 
 beforeAll(async () => {
-    // Login y extraer session_token del header Set-Cookie
-    const loginRes = await fetch(`${BASE_URL}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'tin', password: process.env.AUTH_TIN })
-    });
-    const loginData = await loginRes.json();
-    expect(loginData.user).toBe('tin');
+  await register(users.owner);
+  await register(users.member);
+  await login(users.owner);
+  await login(users.member);
 
-    // Extraer session_token del Set-Cookie header
-    const setCookie = loginRes.headers.get('set-cookie');
-    const tokenMatch = setCookie.match(/session_token=([^;]+)/);
-    expect(tokenMatch).not.toBeNull();
-    sessionToken = tokenMatch[1];
-}, 15000);
+  const created = await fetch(`${BASE_URL}/api/groups`, opts(users.owner, 'POST', {
+    name: 'Grupo pagos test', base_currency: 'UYU'
+  }));
+  if (!created.ok) throw new Error(`No se pudo crear el grupo: ${created.status}`);
+  groupId = (await created.json()).id;
+
+  const invited = await fetch(`${BASE_URL}/api/groups/${groupId}/members`, opts(users.owner, 'POST', {
+    username: users.member.username, role: 'member'
+  }));
+  if (!invited.ok) throw new Error(`No se pudo invitar: ${invited.status}`);
+  const invitationsRes = await fetch(`${BASE_URL}/api/groups/invitations`, opts(users.member, 'GET'));
+  const invitations = await invitationsRes.json();
+  const invitation = invitations.find(i => String(i.group_id) === String(groupId));
+  if (!invitation) throw new Error('No apareció la invitación');
+  const accepted = await fetch(`${BASE_URL}/api/groups/invitations/${invitation.id}/accept`, opts(users.member, 'POST', {}));
+  if (!accepted.ok) throw new Error(`No se pudo aceptar: ${accepted.status}`);
+}, 30000);
 
 afterAll(async () => {
-    // Cleanup: delete test payments
-    if (DB_URL && DB_TOKEN) {
-        const db = createClient({ url: DB_URL, authToken: DB_TOKEN });
-        await db.execute('DELETE FROM payments WHERE description LIKE ?', ['test_%']);
-        await db.close();
-    }
+  for (const user of [users.owner, users.member]) {
+    if (!user.cookie) continue;
+    await fetch(`${BASE_URL}/api/profile`, opts(user, 'DELETE', { current_password: PASSWORD })).catch(() => {});
+  }
 }, 15000);
 
-describe('Payment Endpoints', () => {
+describe('Pagos group-scoped', () => {
+  test('POST crea un pago en el grupo', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`, opts(users.owner, 'POST', {
+      from_user: users.owner.username,
+      to_user: users.member.username,
+      amount: 500,
+      currency: 'UYU',
+      date: '2026-11-20',
+      description: 'test_pago_uy'
+    }));
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.id).toBeDefined();
+    createdPaymentId = data.id;
+  });
 
-    const getFetchOpts = (method, body) => {
-        const opts = {
-            method,
-            headers: {
-                'Cookie': `session_token=${sessionToken}`
-            }
-        };
-        if (body) {
-            opts.headers['Content-Type'] = 'application/json';
-            opts.body = JSON.stringify(body);
-        }
-        return opts;
-    };
+  test('POST rechaza monto negativo', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`, opts(users.owner, 'POST', {
+      from_user: users.owner.username, to_user: users.member.username, amount: -1, date: '2026-11-20'
+    }));
+    expect(res.status).toBe(400);
+  });
 
-    test('POST /api/payment - crear pago con UYU', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment`, getFetchOpts('POST', {
-            from_user: 'me',
-            to_user: 'partner',
-            amount: 5000,
-            currency: 'UYU',
-            date: '2025-09-10',
-            description: 'test_pago_uy'
-        }));
-        const data = await res.json();
-        expect(res.status).toBe(200);
-        expect(data.message).toBe('Pago registrado con éxito');
-        expect(data.id).toBeDefined();
-    });
+  test('POST rechaza pagarse a sí mismo', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`, opts(users.owner, 'POST', {
+      from_user: users.owner.username, to_user: users.owner.username, amount: 10, date: '2026-11-20'
+    }));
+    expect(res.status).toBe(400);
+  });
 
-    test('POST /api/payment - crear pago con USD', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment`, getFetchOpts('POST', {
-            from_user: 'partner',
-            to_user: 'me',
-            amount: 50,
-            currency: 'USD',
-            date: '2025-09-11',
-            description: 'test_pago_usd'
-        }));
-        const data = await res.json();
-        expect(res.status).toBe(200);
-        expect(data.message).toBe('Pago registrado con éxito');
-    });
+  test('POST rechaza fecha inválida', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`, opts(users.owner, 'POST', {
+      from_user: users.owner.username, to_user: users.member.username, amount: 10, date: '2026-99-99'
+    }));
+    expect(res.status).toBe(400);
+  });
 
-    test('POST /api/payment - validar monto negativo', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment`, getFetchOpts('POST', {
-            from_user: 'me',
-            to_user: 'partner',
-            amount: -100,
-            currency: 'UYU',
-            date: '2025-09-10',
-            description: 'test_monto_neg'
-        }));
-        const data = await res.json();
-        expect(res.status).toBe(400);
-        expect(data.error).toBe('El monto debe ser un número positivo');
-    });
+  test('GET lista pagos del grupo', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`, opts(users.owner, 'GET'));
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.some(p => p.id === createdPaymentId)).toBe(true);
+    expect(data[0]).toHaveProperty('from_name');
+  });
 
-    test('POST /api/payment - validar mismo usuario', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment`, getFetchOpts('POST', {
-            from_user: 'me',
-            to_user: 'me',
-            amount: 100,
-            currency: 'UYU',
-            date: '2025-09-10',
-            description: 'test_mismo_user'
-        }));
-        const data = await res.json();
-        expect(res.status).toBe(400);
-        expect(data.error).toBe('No puedes pagarte a ti mismo');
-    });
+  test('GET balance refleja el pago', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/balance`, opts(users.owner, 'GET'));
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    const owner = data.balances.find(b => b.username === users.owner.username);
+    expect(owner.payments_net).toBe(500);
+  });
 
-    test('POST /api/payment - validar fecha inválida', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment`, getFetchOpts('POST', {
-            from_user: 'me',
-            to_user: 'partner',
-            amount: 100,
-            currency: 'UYU',
-            date: '2025-99-99',
-            description: 'test_fecha'
-        }));
-        const data = await res.json();
-        expect(res.status).toBe(400);
-        expect(data.error).toBe('Fecha inválida');
-    });
+  test('GET exporta CSV del grupo', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/export/csv`, opts(users.owner, 'GET'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/csv');
+    const csv = await res.text();
+    expect(csv).toContain('Reparto');
+    expect(csv).toContain('test_pago_uy');
+  });
 
-    test('GET /api/payments - listar pagos', async () => {
-        const res = await fetch(`${BASE_URL}/api/payments`, {
-            headers: { 'Cookie': `session_token=${sessionToken}` }
-        });
-        const data = await res.json();
-        expect(res.status).toBe(200);
-        expect(Array.isArray(data)).toBe(true);
-        expect(data.length).toBeGreaterThan(0);
+  test('DELETE elimina el pago y luego da 404', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments/${createdPaymentId}`, opts(users.owner, 'DELETE'));
+    expect(res.status).toBe(200);
+    const again = await fetch(`${BASE_URL}/api/groups/${groupId}/payments/${createdPaymentId}`, opts(users.owner, 'DELETE'));
+    expect(again.status).toBe(404);
+  });
 
-        // Verificar estructura de los datos
-        const firstPayment = data[0];
-        expect(firstPayment).toHaveProperty('id');
-        expect(firstPayment).toHaveProperty('from_user');
-        expect(firstPayment).toHaveProperty('to_user');
-        expect(firstPayment).toHaveProperty('amount');
-        expect(firstPayment).toHaveProperty('currency');
-        expect(firstPayment).toHaveProperty('date');
-    });
-
-    test('GET /api/expenses - balance incluye pagos', async () => {
-        const res = await fetch(`${BASE_URL}/api/expenses`, {
-            headers: { 'Cookie': `session_token=${sessionToken}` }
-        });
-        const data = await res.json();
-        expect(res.status).toBe(200);
-        expect(data.summary.payments).toBeDefined();
-        expect(data.summary.payments).toHaveProperty('me');
-        expect(data.summary.payments).toHaveProperty('partner');
-        expect(data.summary.payments).toHaveProperty('net');
-        expect(data.payments).toBeDefined();
-        expect(Array.isArray(data.payments)).toBe(true);
-    });
-
-    test('DELETE /api/payment/:id - eliminar pago', async () => {
-        // Obtener último pago de prueba
-        const paymentsRes = await fetch(`${BASE_URL}/api/payments`, {
-            headers: { 'Cookie': `session_token=${sessionToken}` }
-        });
-        const payments = await paymentsRes.json();
-        const testPayment = payments.find(p => p.description === 'test_pago_uy');
-
-        if (testPayment) {
-            const delRes = await fetch(`${BASE_URL}/api/payment/${testPayment.id}`, {
-                method: 'DELETE',
-                headers: { 'Cookie': `session_token=${sessionToken}` }
-            });
-            const delData = await delRes.json();
-            expect(delRes.status).toBe(200);
-            expect(delData.message).toBe('Pago eliminado con éxito');
-
-            // Verificar que ya no aparece
-            const paymentsRes2 = await fetch(`${BASE_URL}/api/payments`, {
-                headers: { 'Cookie': `session_token=${sessionToken}` }
-            });
-            const payments2 = await paymentsRes2.json();
-            const stillExists = payments2.some(p => p.id === testPayment.id);
-            expect(stillExists).toBe(false);
-        }
-    });
-
-    test('DELETE /api/payment/:id - eliminar no existente', async () => {
-        const res = await fetch(`${BASE_URL}/api/payment/999999`, {
-            method: 'DELETE',
-            headers: { 'Cookie': `session_token=${sessionToken}` }
-        });
-        const data = await res.json();
-        expect(res.status).toBe(404);
-        expect(data.error).toBe('Pago no encontrado');
-    });
-
-    test('GET /api/payments - sin auth', async () => {
-        const res = await fetch(`${BASE_URL}/api/payments`);
-        const data = await res.json();
-        expect(res.status).toBe(401);
-        expect(data.error).toBe('No autenticado');
-    });
-
+  test('GET sin sesión devuelve 401', async () => {
+    const res = await fetch(`${BASE_URL}/api/groups/${groupId}/payments`);
+    expect(res.status).toBe(401);
+  });
 });

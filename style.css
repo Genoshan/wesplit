@@ -1,9 +1,31 @@
-/* GitHub Light (default) */
-[data-bs-theme="github"],
+/* Splitwise (default) */
+[data-bs-theme="splitwise"],
 :root {
+    --bs-body-bg: #f7f8fa;
+    --bs-body-color: #2d3436;
+    --bs-border-color: #e0e4e8;
+    --border-color: var(--bs-border-color);
+    --bs-primary: #ff652f;
+    --bs-success: #5bc5a7;
+    
+    --card-bg: #ffffff;
+    --text-primary: #2d3436;
+    --text-secondary: #636e72;
+    --accent-color: #ff652f;
+    --accent-strong: #e85a2a;
+    --soft-panel: #f0f2f5;
+    --success-color: #5bc5a7;
+    --danger-color: #ff652f;
+    --owed-color: #5bc5a7;
+    --owe-color: #ff652f;
+}
+
+/* (removed) */
+[data-bs-theme="github-disabled"] {
     --bs-body-bg: #f3f5f7;
     --bs-body-color: #1f2933;
     --bs-border-color: #d9e1e8;
+    --border-color: var(--bs-border-color);
     --bs-primary: #1769aa;
     --bs-success: #257a4f;
     
@@ -16,38 +38,50 @@
     --success-color: #257a4f;
 }
 
-/* Dracula */
-[data-bs-theme="dracula"] {
-    --bs-body-bg: #282a36;
-    --bs-body-color: #f8f8f2;
-    --bs-border-color: #6272a4;
-    --bs-primary: #ff79c6;
-    --bs-success: #50fa7b;
+/* Splitwise Dark */
+[data-bs-theme="splitwise-dark"] {
+    --bs-body-bg: #1a1d21;
+    --bs-body-color: #e8e9ea;
+    --bs-border-color: #2d3139;
+    --border-color: var(--bs-border-color);
+    --bs-primary: #ff652f;
+    --bs-success: #5bc5a7;
     
-    --card-bg: #3a3d4f;
-    --text-primary: #f8f8f2;
-    --text-secondary: #c7cad8;
-    --accent-color: #ff79c6;
-    --accent-strong: #ff5bb8;
-    --soft-panel: #343746;
-    --success-color: #50fa7b;
+    --card-bg: #242830;
+    --text-primary: #e8e9ea;
+    --text-secondary: #9aa0a6;
+    --accent-color: #ff652f;
+    --accent-strong: #ff8559;
+    --soft-panel: #1f2328;
+    --success-color: #5bc5a7;
+    --danger-color: #ff652f;
+    --owed-color: #5bc5a7;
+    --owe-color: #ff652f;
 }
 
-/* Nord */
-[data-bs-theme="nord"] {
-    --bs-body-bg: #2e3440;
-    --bs-body-color: #eceff4;
-    --bs-border-color: #4c566a;
-    --bs-primary: #88c0d0;
-    --bs-success: #a3be8c;
-    
-    --card-bg: #3b4252;
-    --text-primary: #eceff4;
-    --text-secondary: #d8dee9;
-    --accent-color: #88c0d0;
-    --accent-strong: #5e81ac;
-    --soft-panel: #343c4a;
-    --success-color: #a3be8c;
+/* Tabs: contrast fix for dark theme */
+.app-tabs {
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.app-tabs .nav-link {
+    color: var(--text-secondary);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    font-weight: 500;
+}
+
+.app-tabs .nav-link:hover {
+    color: var(--text-primary);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.app-tabs .nav-link.active {
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
+    background: transparent;
+    font-weight: 600;
 }
 
 /* Fix Bootstrap table colors in dark themes */
@@ -166,7 +200,17 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.current-group-badge {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--soft-panel);
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-left: 8px;
 }
 
 .theme-select {
@@ -486,12 +530,14 @@ body {
 
 .chart-area {
     position: relative;
-    min-height: 320px;
+    max-width: 400px;
+    margin: 0 auto;
+    min-height: 280px;
 }
 
-#categoryChart {
-    width: 100% !important;
-    height: 320px !important;
+#category-chart {
+    max-width: 400px !important;
+    max-height: 280px !important;
 }
 
 .chart-empty {
@@ -756,11 +802,13 @@ body {
     }
 
     .chart-area {
+        max-width: 320px;
         min-height: 200px;
     }
 
-    #categoryChart {
-        height: 200px !important;
+    #category-chart {
+        max-width: 320px !important;
+        max-height: 200px !important;
     }
 
     .chart-summary {
@@ -827,7 +875,7 @@ body {
         min-height: 180px;
     }
 
-    #categoryChart {
+    #category-chart {
         height: 180px !important;
     }
 
@@ -858,126 +906,6 @@ body {
             text-size-adjust: 100%;
         }
     }
-}
-
-/* Recurring Expenses */
-.recurring-card {
-    margin-top: 24px;
-}
-
-.recurring-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 18px;
-}
-
-.recurring-list {
-    display: grid;
-    gap: 12px;
-}
-
-.recurring-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px;
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: background-color 0.2s;
-}
-
-.recurring-item:hover {
-    background: var(--soft-panel);
-}
-
-.recurring-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.recurring-description {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-primary);
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.recurring-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-}
-
-.recurring-freq-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: var(--soft-panel);
-    color: var(--text-secondary);
-    text-transform: uppercase;
-}
-
-.recurring-amount {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--accent-strong);
-    white-space: nowrap;
-}
-
-.recurring-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.btn-recurring-add {
-    padding: 6px 14px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    border-radius: 6px;
-    white-space: nowrap;
-}
-
-.btn-recurring-edit,
-.btn-recurring-delete {
-    padding: 6px 10px;
-    font-size: 0.78rem;
-    border-radius: 6px;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-recurring-edit {
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-}
-
-.btn-recurring-edit:hover {
-    background: var(--soft-panel);
-    color: var(--text-primary);
-}
-
-.btn-recurring-delete {
-    border: 1px solid #dc3545;
-    color: #dc3545;
-}
-
-.btn-recurring-delete:hover {
-    background: #dc3545;
-    color: white;
 }
 
 .app-footer {
@@ -1090,4 +1018,38 @@ body {
 
 .history-actions .btn:last-child {
     margin-bottom: 0;
+}
+
+/* Lote M: invitaciones, desglose y reparto exacto */
+.invitations-panel {
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--soft-panel);
+}
+
+.invitation-row:last-child,
+.member-row:last-child {
+    border-bottom: 0 !important;
+}
+
+.split-breakdown summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.split-breakdown ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.split-breakdown li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+}
+
+.custom-split-input {
+    font-variant-numeric: tabular-nums;
 }

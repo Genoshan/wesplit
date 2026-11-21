@@ -1,22 +1,40 @@
-# AGENTS.md - Gastos Compartidos (WeSplit)
+# AGENTS.md - WeSplit (Gastos compartidos)
 
-Aplicación web simple de gestión de gastos compartidos para dos personas (Tin y Noe). Inspirada en Splitwise.
+Aplicación web de gastos compartidos inspirada en Splitwise. Multiusuario, con grupos dinámicos y N miembros reales.
 
 ## Stack Técnico
 
-- **Frontend**: HTML, CSS (custom variables), Vanilla JS
+- **Frontend**: HTML, CSS (custom properties), Vanilla JS
 - **Backend**: Node.js con Express 5
-- **Base de datos**: SQLite3
-- **Puerto**: 3000
+- **Base de datos**: libSQL (`@libsql/client`) sobre `server/database.sqlite`
+- **Puerto**: 4000 por defecto (`server/index.js:17`)
 
 ## Reglas del Proyecto
 
 1. **Una historia a la vez** — no implementar múltiples funcionalidades en una iteración
-2. **Sin funcionalidades extra** — no login, no grupos, no invitaciones
-3. **Divisiones 50/50** — todos los gastos se dividen equitativamente
+2. **La app ya no es un MVP de dos personas** — tiene registro/login y grupos (ver "Estado real")
+3. **Modos de reparto**: `equal`, `solo`, `custom`; `evenSplits()` reparte centavos exactos entre N miembros
 4. **Simplicidad sobre complejidad** — evitar refactorizaciones innecesarias o lógica compleja
 5. **No inferir requerimientos no expresados**
-6. **Siempre crear rama antes de implementar** — antes de tocar codigo, crear rama `feature/<nombre>`. NUNCA modificar `main` directamente.
+6. **Siempre crear rama antes de implementar** — rama `feature/<nombre>`; NUNCA modificar `main` directamente
+7. **Sin `git add`/`commit`/`push` sin autorización explícita**
+8. **No leer ni reproducir valores de `server/.env`** (secretos)
+
+## Estado real (verificado 2026-11-20)
+
+- **Autenticación**: registro con username/email/password (mínimo 12 caracteres, `bcryptjs` con rehash transparente del formato legacy) y Google OAuth. La allowlist `GOOGLE_AUTHORIZED_EMAILS` está **comentada** en `.env` → entra cualquier email de Google verificado.
+- **Grupos**: cada registro crea su propio grupo `Casa` con el creador como admin. Un usuario puede pertenecer a varios grupos y elegir cuál usar.
+- **Invitación**: solo por username exacto, sin link y sin aceptación del invitado.
+- **Roles**: `users.global_role` (admin/member global) y `group_members.role` (admin/member por grupo) son independientes.
+- **Frontend**: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI en CDNs + CSP; sin handlers inline.
+- **API**: `server/index.js` (`/api/register`, `/api/login`, `/api/google/*`, `/api/currencies`, `/api/version`) y `server/groups.js` (`/api/groups/:id/expenses`, `/balance`, `/payments`, `/members`).
+- **Endpoints legacy eliminados**: `/api/expenses`, `/api/expense/:id` (GET/POST/PUT/DELETE) y el helper `resolveLegacyPayer` ya no existen.
+- **Moneda única por grupo**: se eliminaron la tabla `currencies`, el seed de tasas y sus endpoints; el alta de gasto usa siempre `base_currency` del grupo.
+- **Recurrentes eliminados**: sin rutas, tabla ni CSS.
+- **Grupo personal**: se llama "Mis gastos" (creado al registrar; migración única para grupos legacy con un solo miembro). El default se ordena por fecha de creación.
+- **Invitación**: normaliza mayúsculas/espacios y ofrece sugerencias vía `GET /api/users/search?q=`.
+- **Pendiente**: `POST /api/groups/:id/payments` existe pero no tiene UI y el balance todavía no incluye los pagos.
+- **Decidido, pendiente de implementar (lote M)**: miembros inactivos, edición de gasto con modal, splits personalizados para N miembros y aceptación de invitaciones.
 
 ## Flujo de Desarrollo
 
@@ -33,14 +51,21 @@ Aplicación web simple de gestión de gastos compartidos para dos personas (Tin 
 ```
 wesplit/
 ├── index.html          # Interfaz principal
-├── app.js              # Lógica frontend
-├── style.css           # Estilos con temas (GitHub, Dracula, Nord)
+├── app.js              # Lógica frontend (apiGet/apiPost, render, tabs)
+├── style.css           # Estilos, temas claro/oscuro
 ├── server/
-│   ├── index.js        # API REST (GET /api/expenses, POST /api/expense)
-│   ├── database.js     # Conexión SQLite
+│   ├── index.js        # API de auth, Google, monedas, versión
+│   ├── groups.js       # API de grupos, gastos, miembros, balances, pagos
+│   ├── auth.js         # sesiones, OAuth, getUserGroups
+│   ├── database.js     # esquema libSQL, migraciones one-shot, seed
+│   ├── password.js     # bcryptjs + rehash legacy
 │   └── database.sqlite # Datos persistentes
-├── .localcode/         # Estado del proyecto (SESSION, DECISIONS, ROADMAP)
-└── memory/             # Memoria del agente (logs diarios, referencias)
+├── context/project.md  # Definición del proyecto (actualizada)
+├── docs/flow_diagram.md# Flujo de carga de gastos (actualizado)
+├── plans/              # SDD, auditorías y prompts de auditoría
+├── memory/             # MEMORY.md, BITACORA.md, logs diarios
+├── .localcode/         # SESSION.md, DECISIONS.md (NO hay ROADMAP.md aquí)
+└── ROADMAP.md          # Roadmap vigente (raíz)
 ```
 
 ## Comandos Útiles
@@ -50,10 +75,10 @@ wesplit/
 cd server && npm install
 
 # Iniciar servidor
-node server/index.js
+cd server && npm start
 
 # Verificar puerto
-netstat -ano | findstr :3000
+netstat -ano | findstr :4000
 ```
 
 ## Sistema de Memoria y Bitácora
@@ -116,4 +141,5 @@ netstat -ano | findstr :3000
 - Estado actual: `.localcode/SESSION.md`
 - Decisiones: `.localcode/DECISIONS.md`
 - Bitácora: `memory/BITACORA.md`
-- Roadmap: `.localcode/ROADMAP.md` o `ROADMAP.md`
+- Roadmap: `ROADMAP.md`
+- Auditoría de uso: `plans/audit-uso-resultado.md`

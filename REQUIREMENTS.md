@@ -1,43 +1,59 @@
-# Requisitos para poner en marcha "Reloj"
+# Requisitos para poner en marcha WeSplit
 
-Este documento detalla todo lo necesario para ejecutar correctamente la aplicación de gestión y visualizar el contenido local.
+> Actualizado al 2026-11-20. Documentación de instalación y arranque del estado actual.
 
 ## 1. Requisitos del Sistema
-- **Node.js:** Versión 14.x o superior (recomendado LTS).
-- **Navegador Web:** Cualquier navegador moderno (Chrome, Firefox, Edge) que soporte APIs básicas de JS (Fetch, LocalStorage).
-- **Sistema Operativo:** Windows/Linux/macOS.
+
+- **Node.js:** 18.x o superior (Express 5.2.1).
+- **Navegador:** Chrome, Firefox o Edge moderno (Fetch, LocalStorage, `Intl.NumberFormat`).
+- **Sistema operativo:** Windows, Linux o macOS.
 
 ## 2. Instalación del Servidor (Backend)
-Para iniciar el servidor interno y habilitar la API:
-1. Navega a la carpeta del servidor:
-   ```bash
-   cd server
-   ```
-2. Instala las dependencias de Node.js:
-   ```bash
-   npm install
-   ```
-3. Inicia el servidor (usará el puerto 3000 por defecto):
-   ```bash
-   node index.js
-   ```
+
+```bash
+cd server
+npm install
+npm start
+```
+
+El servidor escucha en el puerto **4000** por defecto (`server/index.js:17`). Para desarrollo con auto-reload: `npm run dev`.
 
 ## 3. Configuración de la Base de Datos
-La aplicación utiliza **SQLite3**. La base de datos se crea y configura automáticamente al iniciar el servidor:
-- El archivo `database.sqlite` se creará en la carpeta `/server` si no existe.
-- Se ejecutará un script para crear la tabla `expenses` con las columnas necesarias (ID, fecha, descripción, monto, pagador y categoría).
+
+El motor es **libSQL** (`@libsql/client`), declarado en `server/package.json`. La base se inicializa sola en `server/database.sqlite` al arrancar (o contra Turso si hay variables de entorno configuradas).
+
+El esquema incluye: `users`, `sessions`, `groups`, `group_members`, `group_expenses`, `group_splits`, `group_payments`, además de las tablas legacy `expenses` y `expense_splits`. Recurrentes y tasas de cambio ya no existen. El seed es **one-shot**: no revive grupos borrados ni sobrescribe datos del usuario.
+
+### Variables de entorno relevantes
+
+| Variable | Uso |
+|---|---|
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Conexión a la BD remota |
+| `AUTH_TIN`, `AUTH_NOE` | Contraseñas legacy; obligatorias si `NODE_ENV=production` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Habilitan el botón de Google |
+| `GOOGLE_AUTHORIZED_EMAILS` | Allowlist; si está ausente o comentada, entra cualquier email verificado |
+| `GOOGLE_REDIRECT_URI`, `ALLOWED_ORIGINS` | URIs permitidas en producción |
+| `TRUST_PROXY` | Para que los rate limits usen la IP real detrás de un proxy |
+
+Los valores están en `server/.env` (archivo no versionado). **No leer ni reproducir su contenido.**
 
 ## 4. Acceso a la Aplicación (Frontend)
-Una vez que el servidor esté corriendo:
-1. Abre tu navegador en: `http://localhost:3000`
-2. El frontend cargará automáticamente los gráficos (Chart.js) y las funcionalidades de ordenamiento (SortableJS).
 
-## 5. Funcionalidades Integradas y Servicios Externos
-- **Clima:** La aplicación consulta datos a `api.open-meteo.com`. Requiere conexión a internet para mostrar la temperatura y descripción del clima actual.
-- **Reloj:** Funcionamiento local independiente del servidor.
-- **Gráficos de Gastos:** Renderizados automáticamente mediante Chart.js al cargar el historial desde la base de datos.
+Con el servidor corriendo, abrir `http://localhost:4000`. No hace falta un servidor estático separado: Express sirve `index.html`, `style.css`, `app.js` y `favicon.ico`, con una allowlist de archivos estáticos y CSP activo.
+
+## 5. Funcionalidades Integradas
+
+- **Autenticación**: registro con username/email/password (mínimo 12 caracteres) y Google OAuth.
+- **Grupos**: cada registro crea un grupo `Mis gastos` propio; invitación por username con normalización y sugerencias de búsqueda.
+- **Gastos**: modos `equal`, `solo` y `custom`, con reparto exacto en centavos entre N miembros.
+- **Balances**: calculados en servidor por grupo.
+- **Gráficos**: Chart.js (doughnut por categoría), cargado desde CDN con SRI.
+- **Temas**: claro/oscuro con persistencia.
+- **Notificaciones**: SweetAlert2 (también con SRI).
+
+No hay integración con clima (`open-meteo`) ni drag & drop (SortableJS): esas referencias eran del MVP inicial y ya no están en el código.
 
 ## 6. Scripts de Lanzamiento (Opcionales)
-Si prefieres usar los archivos ejecutables incluidos:
-- En Windows: `iniciar_servidor.bat`
-- En Linux/macOS: `iniciar_servidor.sh`
+
+- Windows: `iniciar_servidor.bat`
+- Linux/macOS: `iniciar_servidor.sh`
