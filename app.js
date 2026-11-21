@@ -24,6 +24,17 @@ function escapeHtml(value) {
     }[c]));
 }
 
+// Misma política que server/password.js. El servidor vuelve a validar; esto
+// solo da feedback inmediato y evita un viaje innecesario.
+function passwordValidationError(value) {
+    const pwd = String(value || '');
+    if (pwd.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
+    if (!/\p{L}/u.test(pwd) || !/\p{N}/u.test(pwd) || !/[^\p{L}\p{N}\s]/u.test(pwd)) {
+        return 'La contraseña debe incluir al menos una letra, un número y un símbolo';
+    }
+    return null;
+}
+
 function rememberGroup(groupId) {
     if (groupId == null) localStorage.removeItem(groupKey);
     else localStorage.setItem(groupKey, String(groupId));
@@ -1263,6 +1274,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (name) body.name = name;
         if (email) body.email = email;
         if (password) body.password = password;
+        if (password) {
+            const pwdError = passwordValidationError(password);
+            if (pwdError) {
+                Swal.fire({ icon: 'warning', title: 'Contraseña inválida', text: pwdError });
+                return;
+            }
+        }
         if (!name && !email && !password) {
             Swal.fire({ icon: 'info', title: 'Sin cambios', text: 'No se modificó ningún campo.' });
             return;
@@ -1343,6 +1361,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!email.includes('@')) {
             Swal.fire({ icon: 'warning', title: 'Email inválido', text: 'Ingresá un email válido.' });
+            return;
+        }
+        const pwdError = passwordValidationError(password);
+        if (pwdError) {
+            Swal.fire({ icon: 'warning', title: 'Contraseña inválida', text: pwdError });
             return;
         }
         try {

@@ -1,6 +1,6 @@
 // Integración: gastos group-scoped, reparto, validaciones y moneda del grupo.
 // Usa cuentas ficticias creadas en el propio test y las elimina al final.
-const BASE_URL = 'http://localhost:4000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
 const PASSWORD = 'TestExpense12345!';
 const SUFFIX = Date.now();
 
