@@ -1,0 +1,119 @@
+# Especificación — Backoffice de WeSplit
+
+> Estado: **propuesta para aprobación**. Rama: `docs/backoffice-spec`. Sin PR ni implementación aún.
+> Decisiones confirmadas por el usuario (2026-11-21): bootstrap por ENV, misma SPA en `/admin`,
+> métricas agregadas + administración de usuarios/sesiones/recursos + auditoría.
+
+## 1. Principios
+
+1. **No hay navegador crudo de BD.** El superadmin ve vistas curadas y ejecuta acciones acotadas.
+2. **Sin PII innecesaria:** no se muestran password hashes, tokens de sesión ni emails completos.
+3. **Toda acción destructiva pide motivo** y queda en auditoría.
+4. **Superadmin ≠ admin de grupo.** El admin de grupo sigue mandando solo en su grupo.
+5. **Sin telemetría nueva por ahora:** las métricas salen de las tablas existentes.
+
+## 2. Modelo de rol y bootstrap
+
+Se agrega la tabla `superadmins`, **sin tocar el `CHECK` de `users.role`** (eso obligaría a reconstruir la tabla y es riesgoso por las FKs):
+
+```sql
+CREATE TABLE IF NOT EXISTS superadmins (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  created_by TEXT NOT NULL DEFAULT 'env-bootstrap'
+);
+```
+
+- Variable de entorno: `SUPERADMIN_USERNAME` (un solo username por ahora).
+- Al arrancar el servidor, si el usuario existe, se hace `INSERT OR IGNORE` en `superadmins`.
+- Si todavía no existe, se promueve la próxima vez que se registre o al siguiente reinicio.
+- El valor de la ENV **nunca** se imprime ni se muestra en la UI; solo se loguea `"superadmin bootstrap aplicado"`.
+- Middleware `requireSuperadmin` → 403 si no está en `superadmins`.
+
+Cambios de esquema adicionales (seguros, `ALTER TABLE ADD COLUMN`):
+
+- `users.status TEXT NOT NULL DEFAULT 'active'` → values en código: `active` / `disabled`.
+- `users.auth_provider TEXT NOT NULL DEFAULT 'unknown'` → `manual` / `google` / `unknown` para legados.
+- `admin_audit_log (id, actor_id, action, target_type, target_id, reason, created_at)`.
+
+## 3. Superficie
+
+Misma SPA, ruta `/admin`, enlazada solo desde el menú del usuario si es superadmin. Mismo tema claro/oscuro.
+
+Secciones:
+
+| Sección | Contenido |
+|---|---|
+| Resumen | Métricas agregadas, sin registros individuales |
+| Usuarios | Lista/búsqueda, estado, rol, grupos, último acceso; baja/alta y revocar sesiones |
+| Recursos | Grupos, gastos, pagos e invitaciones; baja con motivo |
+| Auditoría | Historial de acciones del superadmin |
+
+## 4. Métricas (fórmulas sobre tablas actuales)
+
+| Métrica | Definición |
+|---|---|
+| Altas por día | `COUNT(users) GROUP BY date(created_at)` |
+| Usuarios activos | `COUNT(DISTINCT user_id)` en sesiones con `expires_at > ahora`, y activos del día por `sessions.created_at` |
+| Google vs manual | `GROUP BY users.auth_provider` |
+| Grupos y primer gasto | Grupos creados por día; `% de usuarios con >= 1 gasto en algún grupo` |
+| Gastos y pagos | Conteo y suma por día/semana, separando `group_expenses` y `group_payments` |
+| Retención D7 / D30 | Usuarios con actividad de sesión en la ventana posterior a su alta |
+
+Todas se devuelven ya agregadas. Ningún endpoint de métricas devuelve filas de usuario.
+
+## 5. Endpoints propuestos (todos bajo `/api/admin/`)
+
+**Lectura**
+
+- `GET /overview` → objeto con todas las métricas.
+- `GET /users?search=&status=&limit=` → `id, username, status, role, auth_provider, created_at, last_seen, group_count`.
+- `GET /groups`, `/expenses`, `/payments`, `/invitations` → listados curados, paginados.
+- `GET /audit` → últimas N acciones.
+
+**Acciones**
+
+- `POST /users/:id/disable` · `POST /users/:id/enable`
+- `DELETE /users/:id/sessions` → borra/invalida sesiones del usuario.
+- `DELETE /groups/:id` · `DELETE /expenses/:id` · `DELETE /payments/:id` · `DELETE /invitations/:id`
+  - Todas requieren body `{ "reason": "..." }` no vacío.
+  - Todas escriben en `admin_audit_log`.
+
+**Reglas**
+
+- No se puede desactivar ni borrar al propio superadmin.
+- Dar de baja un usuario **no borra sus datos**; solo bloquea el login (se chequea `status` en `/api/login` y en el middleware de sesión).
+- Las sesiones ya abiertas se invalidan al desactivar.
+- Los borrados de recursos usan las mismas cascadas que ya existen; no se agrega papelera todavía.
+
+## 6. Seguridad
+
+- `requireSuperadmin` en **todos** los endpoints `/api/admin/*`.
+- Rate limit específico para el backoffice, más estricto que el global.
+- Confirmación modal con campo `motivo` para cada acción destructiva.
+- Auditoría inmutable: la UI solo puede leer `admin_audit_log`.
+- Opcional en fase posterior: 2FA para entrar a `/admin`.
+
+## 7. Fases y criterios de aceptación
+
+1. **Fase 1 — Rol y métricas**
+   - Bootstrap por ENV funcionando; `/admin` invisible para no superadmins.
+   - `/api/admin/overview` devuelve las métricas agregadas.
+2. **Fase 2 — Usuarios y sesiones**
+   - Baja/alta sin pérdida de datos; sesiones revocadas; login bloqueado para `disabled`.
+3. **Fase 3 — Recursos y auditoría**
+   - Borrados con motivo; cada acción aparece en `/api/admin/audit`.
+4. **Fase 4 — Refuerzos**
+   - 2FA, exportes y alertas (si se decide).
+
+## 8. Decisiones por defecto propuestas
+
+Estos puntos no se preguntaron, pero conviene dejarlos escritos para no improvisar:
+
+- La variable se llama `SUPERADMIN_USERNAME` (si después querés varios, se extiende a lista).
+- El superadmin **no puede** impersonar a otro usuario.
+- El superadmin **no ve** emails completos en la UI; solo username y fechas.
+- Los borrados son **duros** (con las cascadas actuales), sin papelera en esta versión.
+- `auth_provider` para cuentas viejas queda `unknown`, no se adivina.
+
+Si aprobás estos defaults, el próximo paso es convertir esta spec en PR de implementación por fases, empezando por la Fase 1.
