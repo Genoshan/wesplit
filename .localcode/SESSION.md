@@ -51,6 +51,8 @@
 - Fix de tema (#20): toggle con etiqueta explícita y CSS muerto eliminado; verificado claro ↔ oscuro en navegador.
 - Botón de tema como ícono (🌙/☀️), fuera del dropdown de usuario y al lado de `+ Grupo`; verificado en navegador.
 - Rediseño del tema claro con paleta Bootstrap 5 estándar: fondo blanco `#ffffff`, primario azul `#0d6efd`, éxito verde `#198754`, peligro rojo `#dc3545`, grises `--bs-*`; `html` hereda el fondo; botón de pago conserva verde Bootstrap. Tema oscuro intacto (verificado estilos computados).
+- Tema claro refinado estilo **Dashboard SaaS** (referencia Dribbble de Apoorv Arora): cards con radio 14px y sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, tipografía de montos más marcada. Todo acotado a `[data-bs-theme="splitwise"]`; oscuro sin cambios.
+- `index.html` incluye `<meta name="darkreader-lock">` y el CSS usa `color-scheme: only light/dark` para que Dark Reader / auto-dark no pisen el tema.
 
 ## Próximos pasos
 

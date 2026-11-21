@@ -371,3 +371,5 @@ Cada entrada debe seguir este formato:
 - **Confirmado**: al abrir Dribbble en el navegador del usuario, el DOM trae `data-darkreader-inline-bgcolor` → tiene la extensión **Dark Reader** activa. Esa extensión oscurece el tema claro.
 - Se agregó `color-scheme: only light` al bloque claro y `only dark` al oscuro.
 - Se agregó `<meta name="darkreader-lock">` en `index.html` para que Dark Reader no procese la app (la app ya tiene su propio toggle claro/oscuro).
+- Con el fix confirmado (body `rgb(255,255,255)` y `darkreader:false` en el navegador del usuario), se exploró Dribbble (`/search/splitwise`), se midió luminosidad de 21 diseños y se eligió la dirección **C — Dashboard SaaS** de Apoorv Arora.
+- Se agregó un bloque acotado a `[data-bs-theme="splitwise"]` con: cards radio 14px + sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, montos con letter-spacing. Oscuro verificado intacto (card 8px, sombra y fondos originales).
