@@ -3,8 +3,8 @@
 ## 🕒 Proyecto wesplit - Gestión de Gastos Compartidos
 *Inspirado en Splitwise. N miembros por grupo, moneda única por grupo y reparto exacto en centavos.*
 
-> **Estado al 2026-11-21:** PRs [#19](https://github.com/Genoshan/wesplit/pull/19) y [#20](https://github.com/Genoshan/wesplit/pull/20) mergeados en `main`. PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto: botón de tema ícono y rediseño del tema claro con paleta Bootstrap 5.
-> Este roadmap estaba desactualizado; la sección siguiente refleja el código real.
+> **Estado al 2026-11-21:** PRs #19 a #27 mergeados en `main`, sin PRs abiertos. Producción en `https://wesplit-k5rc.onrender.com` con `version 1.0.0`, 0 vulnerabilidades en producción y 18/18 tests.
+> Incluye paleta verde Splitwise/navy en tema claro (tema oscuro intacto), favicon, marcador de versión y Google OAuth funcionando. La sección siguiente refleja el código real.
 
 ### 🟢 Fase 1: Fundamentos ✅ COMPLETA
 - [x] Categorías, historial con filtros (texto, categoría, pagador, mes), gráfico por categoría.

@@ -23,18 +23,18 @@ Aplicación web de gastos compartidos inspirada en Splitwise. Multiusuario, con 
 ## Estado real (verificado 2026-11-20)
 
 - **Autenticación**: registro con username/email/password (mínimo 12 caracteres, `bcryptjs` con rehash transparente del formato legacy) y Google OAuth. La allowlist `GOOGLE_AUTHORIZED_EMAILS` está **comentada** en `.env` → entra cualquier email de Google verificado.
-- **Grupos**: cada registro crea su propio grupo `Casa` con el creador como admin. Un usuario puede pertenecer a varios grupos y elegir cuál usar.
-- **Invitación**: solo por username exacto, sin link y sin aceptación del invitado.
+- **Grupos**: cada registro crea su propio grupo `Mis gastos` con el creador como admin. Un usuario puede pertenecer a varios grupos, elegir cuál usar y la selección persiste en `localStorage['seg_group']`.
+- **Invitación**: por username con normalización y sugerencias; aceptación/rechazo dentro de la app, sin link con token.
 - **Roles**: `users.global_role` (admin/member global) y `group_members.role` (admin/member por grupo) son independientes.
 - **Frontend**: pestañas Gastos / Balances / Estadísticas / Miembros; temas claro/oscuro; SRI en CDNs + CSP; sin handlers inline.
-- **API**: `server/index.js` (`/api/register`, `/api/login`, `/api/google/*`, `/api/currencies`, `/api/version`) y `server/groups.js` (`/api/groups/:id/expenses`, `/balance`, `/payments`, `/members`).
+- **API**: `server/index.js` (`/api/version`, `/api/register`, `/api/login`, `/api/logout`, `/api/profile`, `/api/auth/check`, `/api/google/*`, `/api/users/search`) y `server/groups.js` (`/api/groups/:id`, `/expenses`, `/balance`, `/payments`, `/members`, `/invitations`). No existen `/api/currencies` ni `/api/expenses`.
 - **Endpoints legacy eliminados**: `/api/expenses`, `/api/expense/:id` (GET/POST/PUT/DELETE) y el helper `resolveLegacyPayer` ya no existen.
 - **Moneda única por grupo**: se eliminaron la tabla `currencies`, el seed de tasas y sus endpoints; el alta de gasto usa siempre `base_currency` del grupo.
 - **Recurrentes eliminados**: sin rutas, tabla ni CSS.
 - **Grupo personal**: se llama "Mis gastos" (creado al registrar; migración única para grupos legacy con un solo miembro). El default se ordena por fecha de creación.
 - **Invitación**: normaliza mayúsculas/espacios y ofrece sugerencias vía `GET /api/users/search?q=`.
-- **Pendiente**: `POST /api/groups/:id/payments` existe pero no tiene UI y el balance todavía no incluye los pagos.
-- **Decidido, pendiente de implementar (lote M)**: miembros inactivos, edición de gasto con modal, splits personalizados para N miembros y aceptación de invitaciones.
+- **Settle up**: pagos del grupo integrados con UI, historial, exportación CSV y descuento en balances; la moneda es siempre la `base_currency` del grupo.
+- **Lote M implementado**: miembros inactivos (con historial y reactivación), edición de gasto con modal, splits personalizados para N miembros y aceptación de invitaciones.
 
 ## Flujo de Desarrollo
 

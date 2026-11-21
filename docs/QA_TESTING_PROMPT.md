@@ -10,7 +10,7 @@ Sos el QA engineer de **WeSplit** (app web de gastos compartidos, frontend vanil
 
 Tu tarea es ejecutar una **revisión end-to-end** de todas las funcionalidades que ofrece el proyecto, reportando fallos con evidencia y severidad. No modifiques código de producción: limitate a probar y reportar. Si encontrás un bug, no lo arregles; documentalo.
 
-**Fuente de verdad:** el código (`index.html`, `app.js`, `style.css`, `server/*.js`). Los documentos `docs/flow_diagram.md` y `context/project.md` están desactualizados (mencionan el grupo "Casa" e invitaciones sin aceptación): **no los uses como especificación**.
+**Fuente de verdad:** el código (`index.html`, `app.js`, `style.css`, `server/*.js`). Los documentos `docs/flow_diagram.md` y `context/project.md` están actualizados a "Mis gastos", invitaciones con aceptación, fechas validadas y moneda única por grupo. Para un recorrido guiado con dos usuarios reales, usá también `docs/E2E_DOS_USUARIOS.md`.
 
 ## Reglas obligatorias
 
@@ -31,7 +31,7 @@ node index.js            # si no está corriendo
 
 - URL local: `http://localhost:4000`
 - Herramientas disponibles: MCP `browser` (browser aislado) y `browse` (Chrome del usuario), `shell`, `fetch`.
-- Tests automáticos existentes: `server/tests/payment.int.test.js` (9 casos, solo pagos).
+- Tests automáticos existentes: `server/tests/payment.int.test.js` (9 casos) y `server/tests/expense.int.test.js` (9 casos). Total 18/18.
 
 ---
 
@@ -58,7 +58,7 @@ node index.js            # si no está corriendo
 | GRP-01 | Crear grupo | `+ Grupo` → nombre + moneda (UYU/USD/EUR/ARS/BRL) → Crear | Grupo nuevo seleccionado, badge actualizado |
 | GRP-02 | Validar moneda | API con moneda de 2 o 4 letras | 400 |
 | GRP-03 | Cambiar grupo | Seleccionar otro grupo en el dropdown | Se recargan gastos, pagos, balances, miembros |
-| GRP-04 | Persistencia | Recargar la página con un grupo no-default seleccionado | **Verificar y reportar**: la selección vuelve al default (comportamiento actual). Decidir si es bug o diseño. |
+| GRP-04 | Persistencia | Recargar la página con un grupo no-default seleccionado | La selección se restaura desde `localStorage['seg_group']`. |
 | GRP-05 | Editar grupo (admin) | `PUT /api/groups/:id` con nombre/moneda | 200 |
 | GRP-06 | Editar grupo (no admin) | Lo mismo con miembro | 403 "Solo el owner puede editar el grupo" |
 | GRP-07 | Eliminar grupo | Menú usuario → Eliminar grupo → confirmar en modal | Redirige a otro grupo; sin registros huérfanos |
@@ -89,7 +89,7 @@ node index.js            # si no está corriendo
 | EXP-04 | Reparto custom | Partes que suman exacto, +1 cent, +2 cents | Exacto y +1 → OK; +2 → "Reparto incompleto" |
 | EXP-05 | Custom inválido | Parte negativa, duplicada, miembro inexistente | 400 |
 | EXP-06 | Montos inválidos | 0, negativo, `NaN`, string, más de 2 decimales vía API | 400 (o documentar si acepta >2 decimales) |
-| EXP-07 | Fechas | API con fecha "no-fecha"; UI con `date-from > date-to` | Reportar: servidor solo valida presencia; UI muestra "sin coincidencias" |
+| EXP-07 | Fechas | API con fecha "no-fecha"; UI con `date-from > date-to` | API devuelve 400 (`isValidDateString`); UI muestra "sin coincidencias" para el rango invertido |
 | EXP-08 | Editar gasto | Modal → cambiar monto/descripción/categoría/pagador/reparto | Historial y balances se recalculan |
 | EXP-09 | Eliminar gasto | Confirmar y cancelar el Swal | Confirmar borra gasto y sus splits; cancelar no muta |
 | EXP-10 | Doble submit | Doble click rápido en "Agregar gasto" | Solo un gasto creado |
@@ -105,7 +105,7 @@ node index.js            # si no está corriendo
 | PAY-04 | Grupo de un miembro | Abrir formulario de pago en "Mis gastos" | Submit deshabilitado |
 | PAY-05 | Balance | Pagar 30 de A a B | A: "le deben 30"; B: "debe 30" |
 | PAY-06 | Eliminar pago | Confirmar / cancelar Swal | Balance vuelve al estado anterior; cancelar no muta |
-| PAY-07 | Moneda | Pago con moneda distinta a la del grupo | Reportar comportamiento (se almacena la del body, a diferencia de gastos) |
+| PAY-07 | Moneda | Pago con `currency` distinta en el body | Se ignora el body: se almacena y muestra la `base_currency` del grupo |
 | PAY-08 | Autorización | Pago en grupo ajeno, sin sesión | 403 / 401 |
 
 ### 6. Filtros, exportación y estadísticas
@@ -118,7 +118,7 @@ node index.js            # si no está corriendo
 | FLT-04 | Filtro por mes y por rango de fechas | Inclusivo; rango invertido → sin resultados |
 | FLT-05 | Los filtros no afectan balances ni estadísticas | Montos totales se mantienen |
 | CSV-01 | `Exportar CSV` | Descarga `wesplit-{groupId}-{fecha}.csv` con gastos y pagos |
-| CSV-02 | Inyección de fórmulas | Descripción `=SUM(1+1)` → **reportar riesgo**: `esc()` solo duplica comillas |
+| CSV-02 | Inyección de fórmulas | Descripción `=SUM(1+1)` → se exporta como `'=SUM(1+1)` (prefijo `'` en valores que empiezan con `=`, `+`, `-` o `@`) |
 | STAT-01 | Chart de categorías | Doughnut con datos de todos los períodos |
 | STAT-02 | Sin gastos | Estado vacío, sin error en consola |
 
@@ -128,7 +128,7 @@ node index.js            # si no está corriendo
 |---|---|---|
 | UI-01 | Toggle de tema | Botón 🌙/☀️ fuera del dropdown, al lado de `+ Grupo`; `title`/`aria-label` cambian |
 | UI-02 | Persistencia | Recargar mantiene el tema (`localStorage['seg_theme']`) |
-| UI-03 | Claro | Body/cards `rgb(255,255,255)`, primario `rgb(13,110,253)`, pago verde `rgb(25,135,84)` |
+| UI-03 | Claro | Paleta 3: fondo `rgb(254,254,254)`, texto `rgb(36,48,58)`, primario `rgb(39,201,92)`, éxito `rgb(30,94,78)`; botones usan `--bs-btn-*` con esos colores |
 | UI-04 | Oscuro | Body `rgb(26,29,33)`, card `rgb(36,40,48)`, acento `rgb(255,101,47)` |
 | UI-05 | Contraste | Placeholder "Buscar..." legible en ambos temas (`--bs-secondary-color`) |
 | UI-06 | Tablas en oscuro | Encabezado `rgb(232,233,234)` sobre `rgb(26,29,33)` (no letras negras) |

@@ -429,3 +429,26 @@ Cada entrada debe seguir este formato:
 - Detalle: `proxy-addr@2.0.7` → 2.0.8 (critical, vía `express@5.2.1`; relevante porque `server/index.js:88-90` activa `trust proxy` con `TRUST_PROXY`, lo que permite IP spoofing vía IPv4-mapped IPv6 contra el rate limit), `body-parser@2.3.0` → 2.4.0 (high, DoS con body comprimido), `qs@6.15.3` → 6.17.1 y `ip-address@10.3.1` → 10.7.6 (moderate).
 - El usuario autorizó explícitamente arreglar **solo las de producción**. Se ejecutó `npm audit fix` en `server/` (sin `--force`, sin `--omit=dev` para no desinstalar dev deps): quedan **0 vulnerabilidades en prod** y 18 moderadas de Jest (dev, no desplegadas). `package.json` sin cambios, solo `server/package-lock.json` (actualizaciones dentro de los rangos `^` vigentes; también subió `brace-expansion`, que era el otro high).
 - Se detuvo el server local para evitar locks de archivos durante el fix y se volvió a levantar. `npm test --prefix server`: **18/18** (la primera pasada falló con ECONNREFUSED porque el server estaba detenido).
+- PR #24 mergeado por el usuario. El Manual Deploy que quedó pendiente del PR #23 compiló el estado final `1bf5c9b` (incluye #23 y #24) y terminó a las 16:20:57Z. Log de Render: `found 0 vulnerabilities`. Producción verificada: `/api/version` con `commit 1bf5c9b`, `/style.css` con `#27c95c` y `--bs-btn-bg`.
+
+## [2026-11-21] Favicon para pestañas del navegador
+
+- El usuario pidió un prompt para generar el favicon con Gemini/Nano Banana y luego aportó el PNG resultante (1024×1024). Análisis por código: paleta respetada (verdes #27C95C / #268874 / #1E5E4E, sin azul ni naranja), fondo #FEFEFE 79%, símbolo centrado en bbox 567×567 en (228,228).
+- Se convirtió el PNG a `favicon.ico` multi-tamaño (16/32/48/64 px, entradas PNG con alpha), con fondo transparente y recorte al símbolo + 8% de padding. Primera pasada falló porque la fórmula de alpha volvía opacos los halos casi blancos: se corrigió con deadzone de 6 sobre fondo 254 y el bbox pasó de 1000×1024 a 563×562.
+- `index.html`: `<link rel="icon" type="image/x-icon" href="/favicon.ico">`. El servidor ya tenía `/favicon.ico` en `PUBLIC_ASSETS`, así que no se modificó el backend.
+- Commit `a319674` en `ui/favicon`, PR #25 abierto. Verificado en local: ICO con 4 entradas válidas, `GET /favicon.ico` → 200 `image/vnd.microsoft.icon` (10182 bytes) y HTML con el link. Pendiente de merge + Manual Deploy y de la aprobación visual del usuario.
+- También se creó `docs/E2E_DOS_USUARIOS.md` (12 casos para dos personas) y se corrigieron expectativas viejas en `docs/QA_TESTING_PROMPT.md`. Quedan sin commitear a propósito para no generar otro deploy.
+
+## [2026-11-21] OAuth de Google en producción
+
+- El usuario reportó `Google OAuth no configurado correctamente` al tocar el botón. `/api/google/config` daba `enabled: true` pero `/api/google/init` con el origin de prod daba 500: `getGoogleRedirectUri()` devolvía null porque Render no tenía `GOOGLE_REDIRECT_URI` ni `ALLOWED_ORIGINS` con la URL pública. Se agregó en Render `GOOGLE_REDIRECT_URI=https://wesplit-k5rc.onrender.com/api/google/callback` (Save and deploy) y en Google Console la misma Authorized redirect URI. Verificado: `/api/google/init` → 200.
+- Apareció `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` de express-rate-limit: Render manda `X-Forwarded-For` pero `trust proxy` estaba false. Estaba latente desde el primer deploy y se manifestó con la primera request de verificación. Se agregó `TRUST_PROXY=1` en Render. Sin warn en los logs posteriores.
+- Luego el callback devolvió 401 `El email de Google no está verificado`. PR #26 (`70105f3`) aceptó el string `"true"` de `tokeninfo`, pero el error persistió con el commit `96b9f4c` desplegado. PR #27 (`b8b00f2`) pasó a verificar también con `userinfo` (OIDC, booleano), aceptando `email_verified`/`verified_email` en ambas formas, y agregó logs `[GOOGLE DEBUG]` solo de campos/tipos. Tests 18/18.
+- **Resultado**: el usuario confirmó que con el PR #27 el flujo funcionó. Aclaró que **siempre probó con el mismo correo**, por lo que se descarta que la cuenta tuviera el email sin verificar: el arreglo real fue usar `userinfo` (OIDC, booleano) en lugar de `tokeninfo` para el flag. El login matcheó por email con el usuario existente y recuperó sus datos anteriores. Quedan los logs temporales `[GOOGLE DEBUG]` para limpiar en otro PR.
+- Fuentes consultadas: Render Docs (Environment Variables, opciones Save and deploy vs Save only) y Google (Manage OAuth Clients, backend-auth: `tokeninfo` devuelve `email_verified` como string).
+
+## [2026-11-21] Limpieza final y deuda documental
+
+- El usuario pidió análisis del repo: Fase 1 y 2 del roadmap completas, PRs #19–#27 mergeados, sin PRs abiertos, producción sana. Aprobó un PR de limpieza aparte de los cambios funcionales.
+- Se sacaron los tres logs `[GOOGLE DEBUG]` de `server/auth.js` (se conserva la verificación robusta con `userinfo`). Se actualizaron `README.md`, `ROADMAP.md`, `AGENTS.md`, `TODO_BACKLOG.md` y `plans/sdd-google-oauth.md`, que todavía hablaban del PR #21 abierto, paleta azul, grupo `Casa`, invitaciones sin aceptación, `/api/currencies`, pagos sin UI y la URL vieja de `genoshan.com`.
+- Se suben finalmente `docs/E2E_DOS_USUARIOS.md` y las correcciones de `docs/QA_TESTING_PROMPT.md`, que estaban sin commitear a propósito.
