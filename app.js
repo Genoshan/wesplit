@@ -34,9 +34,9 @@ async function logBuildInfo() {
     try {
         const info = await fetch('/api/version', { cache: 'no-store' }).then(r => r.json());
         const suffix = info.branch && info.branch !== 'local' ? ` · ${info.branch}` : '';
-        console.info(`%cWeSplit v${info.version} · ${info.commit}${suffix}`, 'color:#0d6efd;font-weight:bold');
+        console.info(`%cWeSplit v${info.version} · ${info.commit}${suffix}`, 'color:#1e5e4e;font-weight:bold');
     } catch (_) {
-        console.info(`%cWeSplit v${APP_VERSION}`, 'color:#0d6efd;font-weight:bold');
+        console.info(`%cWeSplit v${APP_VERSION}`, 'color:#1e5e4e;font-weight:bold');
     }
 }
 
