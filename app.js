@@ -355,7 +355,7 @@ async function confirmCreateGroup() {
         modal.hide();
         await loadAuth();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -384,7 +384,7 @@ async function confirmDeleteGroup() {
         rememberGroup(currentGroupId);
         await loadAuth();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -412,7 +412,7 @@ async function renderBalances() {
         const data = await apiGet(`/api/groups/${currentGroupId}/balance`);
         const balances = data.balances || [];
         if (balances.length === 0) {
-            container.innerHTML = '<p class="text-muted">No hay datos de balance.</p>';
+            container.innerHTML = '<p class="text-muted">Cuando carguen gastos, acá aparece quién debe cuánto.</p>';
             return;
         }
         container.innerHTML = balances.map(b => {
@@ -435,7 +435,7 @@ async function renderBalances() {
         }).join('');
     } catch (err) {
         console.error('[APP] Failed to load balances:', err);
-        container.innerHTML = '<p class="text-danger">Error al cargar balances.</p>';
+        container.innerHTML = '<p class="text-danger">No pudimos traer los balances. Recargá la página.</p>';
     }
 }
 
@@ -451,7 +451,7 @@ async function renderMembers() {
         renderPaymentOptions();
         updateSplitDisplay();
         if (members.length === 0) {
-            container.innerHTML = '<p class="text-muted">No hay miembros.</p>';
+            container.innerHTML = '<p class="text-muted">Todavía no hay nadie más en el grupo.</p>';
             return;
         }
         const activeAdmins = members.filter(x => x.member_role === 'admin' && x.status === 'active').length;
@@ -483,7 +483,7 @@ async function renderMembers() {
         updateDeleteButtonFromMembers(members);
     } catch (err) {
         console.error('[APP] Failed to load members:', err);
-        container.innerHTML = '<p class="text-danger">Error al cargar miembros.</p>';
+        container.innerHTML = '<p class="text-danger">No pudimos traer los miembros. Recargá la página.</p>';
     }
 }
 
@@ -499,10 +499,12 @@ async function renderInvitations() {
     const container = document.getElementById('invitations-list');
     const panel = document.getElementById('invitations-panel');
     const countBadge = document.getElementById('invitations-count');
+    const labelEl = document.getElementById('invitations-label');
     const headerBtn = document.getElementById('invitations-btn');
     try {
         const invitations = await apiGet('/api/groups/invitations');
         if (countBadge) countBadge.textContent = invitations.length;
+        if (labelEl) labelEl.textContent = invitations.length === 1 ? 'invitación nueva' : 'invitaciones nuevas';
         if (headerBtn) headerBtn.hidden = invitations.length === 0;
         if (!container || !panel) return;
         panel.hidden = invitations.length === 0;
@@ -533,9 +535,9 @@ async function acceptInvitation(id) {
         }
         await loadAuth();
         await renderInvitations();
-        Swal.fire({ icon: 'success', title: 'Invitación aceptada', text: 'Ya podés ver el grupo.' });
+        Swal.fire({ icon: 'success', title: '¡Listo!', text: `Ya sos parte de ${escapeHtml(accepted?.group_name || 'este grupo')}.` });
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -544,7 +546,7 @@ async function rejectInvitation(id) {
         await apiDelete(`/api/groups/invitations/${id}`);
         await renderInvitations();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -554,7 +556,7 @@ async function cancelInvitation(id) {
         await renderMembers();
         await renderInvitations();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -563,7 +565,7 @@ async function reactivateMember(id) {
         await apiPost(`/api/groups/${currentGroupId}/members/${id}/reactivate`, {});
         await renderMembers();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -624,7 +626,7 @@ async function removeMember(userId) {
         await apiDelete(`/api/groups/${currentGroupId}/members/${userId}`);
         await renderMembers();
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -706,7 +708,7 @@ async function addExpense(formData) {
         document.getElementById('expense-amount').value = '';
     } catch (err) {
         console.error('[APP] Failed to add expense:', err);
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     } finally {
         isSubmittingExpense = false;
     }
@@ -726,7 +728,7 @@ async function deleteExpense(expenseId) {
         await loadExpenses();
     } catch (err) {
         console.error('[APP] Failed to delete expense:', err);
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -801,9 +803,9 @@ async function submitPayment() {
         document.getElementById('payment-form')?.reset();
         renderPaymentOptions();
         await Promise.all([loadPayments(), renderBalances()]);
-        Swal.fire({ icon: 'success', title: 'Pago registrado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        Swal.fire({ icon: 'success', title: 'Pago anotado. Balances actualizados ✅', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     } finally {
         isSubmittingPayment = false;
     }
@@ -815,7 +817,7 @@ async function deletePayment(paymentId) {
         await Promise.all([loadPayments(), renderBalances()]);
         Swal.fire({ icon: 'success', title: 'Pago eliminado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -823,9 +825,11 @@ function renderPayments() {
     const body = document.getElementById('payments-body');
     const count = document.getElementById('payments-count');
     if (!body) return;
-    if (count) count.textContent = `${allPayments.length} pago${allPayments.length === 1 ? '' : 's'}`;
+    if (count) count.textContent = allPayments.length === 0
+        ? 'Sin pagos todavía'
+        : `${allPayments.length} pago${allPayments.length === 1 ? '' : 's'}`;
     if (allPayments.length === 0) {
-        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay pagos registrados</td></tr>';
+        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Cuando alguien pague, queda anotado acá.</td></tr>';
         return;
     }
     body.innerHTML = allPayments.map(payment => `
@@ -867,7 +871,7 @@ async function exportToCsv() {
         link.remove();
     } catch (err) {
         console.error('[APP] Failed to export CSV:', err);
-        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo exportar el CSV.' });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: 'No se pudo exportar el CSV. Probá de nuevo en un segundo.' });
     }
 }
 
@@ -1153,9 +1157,9 @@ async function submitEditExpense() {
         modal.hide();
         editingExpenseId = null;
         await loadExpenses();
-        Swal.fire({ icon: 'success', title: 'Gasto actualizado', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+        Swal.fire({ icon: 'success', title: 'Cuenta actualizada', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
     } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+        Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
     }
 }
 
@@ -1330,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             Swal.fire({ icon: 'success', title: 'Perfil actualizado', text: 'Los cambios se guardaron correctamente.' });
         } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+            Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
         }
     });
 
@@ -1359,7 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.reload();
             });
         } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+            Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
         }
     });
 
@@ -1407,10 +1411,10 @@ document.addEventListener('DOMContentLoaded', () => {
             await apiPost('/api/register', { username, password, email, name });
             const modal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
             modal.hide();
-            Swal.fire({ icon: 'success', title: 'Cuenta creada', text: 'Ahora podés iniciar sesión.' });
+            Swal.fire({ icon: 'success', title: '¡Listo!', text: 'Ya tenés tu grupo "Mis gastos". Ingresá para verlo.' });
             document.getElementById('login-username').value = username;
         } catch (err) {
-            Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+            Swal.fire({ icon: 'error', title: 'No se pudo completar', text: `${err.message} Probá de nuevo en un segundo.` });
         }
     });
 
@@ -1439,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const expenseForm = document.getElementById('expense-form');
         const paymentForm = document.getElementById('payment-form');
         const title = document.getElementById('form-title');
-        toggleModeBtn.textContent = paymentMode ? 'Cambiar a Gasto' : 'Cambiar a Pago';
+        toggleModeBtn.textContent = paymentMode ? '¿Fue un gasto? Cambiar' : '¿Fue un pago? Cambiar';
         if (expenseForm) expenseForm.style.display = paymentMode ? 'none' : '';
         if (paymentForm) {
             paymentForm.style.display = paymentMode ? '' : 'none';
@@ -1449,7 +1453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderPaymentOptions();
             }
         }
-        if (title) title.textContent = paymentMode ? 'Registrar pago' : 'Agregar gasto';
+        if (title) title.textContent = paymentMode ? 'Registrar pago' : '¿Quién pagó y cuánto?';
     });
 
     // Load
