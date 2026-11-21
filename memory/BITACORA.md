@@ -373,3 +373,7 @@ Cada entrada debe seguir este formato:
 - Se agregó `<meta name="darkreader-lock">` en `index.html` para que Dark Reader no procese la app (la app ya tiene su propio toggle claro/oscuro).
 - Con el fix confirmado (body `rgb(255,255,255)` y `darkreader:false` en el navegador del usuario), se exploró Dribbble (`/search/splitwise`), se midió luminosidad de 21 diseños y se eligió la dirección **C — Dashboard SaaS** de Apoorv Arora.
 - Se agregó un bloque acotado a `[data-bs-theme="splitwise"]` con: cards radio 14px + sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, montos con letter-spacing. Oscuro verificado intacto (card 8px, sombra y fondos originales).
+
+### Fix de contraste: placeholder ilegible en oscuro
+- El placeholder de los inputs usaba `--bs-secondary-color` de Bootstrap (`rgba(33,37,41,.75)`, gris de fondo claro) y quedaba casi invisible sobre el fondo oscuro (ej. “Buscar…” con foco).
+- Se fijó `--bs-secondary-color` por tema: claro `rgba(33,37,41,.75)`, oscuro `rgba(232,233,234,.75)`. Verificado en ambos.
