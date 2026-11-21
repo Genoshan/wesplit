@@ -1,6 +1,8 @@
 /* Splitwise light — paleta Bootstrap 5 estándar (fondo blanco) */
 [data-bs-theme="splitwise"],
 :root {
+    /* Evita que el auto-dark del navegador oscurezca el tema claro. */
+    color-scheme: only light;
     --bs-body-bg: #ffffff;
     --bs-body-color: #212529;
     --bs-border-color: #dee2e6;
@@ -28,6 +30,7 @@
 
 /* Splitwise Dark */
 [data-bs-theme="splitwise-dark"] {
+    color-scheme: only dark;
     --bs-body-bg: #1a1d21;
     --bs-body-color: #e8e9ea;
     --bs-border-color: #2d3139;

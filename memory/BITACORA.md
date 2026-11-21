@@ -365,3 +365,7 @@ Cada entrada debe seguir este formato:
 
 ### Estado final
 - PR [#21](https://github.com/Genoshan/wesplit/pull/21) abierto (`ui/theme-button` → `main`) con el botón ícono y el rediseño claro; pendiente de merge y deploy.
+
+### Seguimiento: fondo claro se veía oscuro en el navegador del usuario
+- Capturas mostraron acentos azules (CSS nuevo aplicado) pero fondo/cards oscuros: firma de auto-dark del navegador (Chrome/Edge `#enable-force-dark` o extensión tipo Dark Reader), no del CSS.
+- Se agregó `color-scheme: only light` al bloque claro y `only dark` al oscuro para que el UA no oscurezca el tema claro. Verificado: claro `color-scheme: light only`, body `rgb(255,255,255)`; oscuro `dark only`.
