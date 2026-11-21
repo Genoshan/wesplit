@@ -1,7 +1,7 @@
 # Current Session Status
 
 - **Actualizado**: 2026-11-21
-- **Rama**: `ui/palette-option-3` desde `main` (`6984902`). PRs #19–#22 mergeados; PR #23 abierto (paleta del tema claro).
+- **Rama**: `fix/npm-audit-prod` desde `main` (`681bc88`). PRs #19–#23 mergeados; PR #24 abierto (fix de vulnerabilidades de producción).
 - **Servidor**: `http://localhost:4000` (`node index.js` desde `./server/`).
 
 ## Estado actual
@@ -61,13 +61,17 @@
 - PR #21 mergeado por el usuario (15:29Z) y PR #22 mergeado (15:50Z, squash → `6984902`). Producción deployada con v1.0.0: `/api/version` = `version 1.0.0`, `commit 6984902`, `branch main`.
 - Paleta 3 del diseño (Verde Splitwise / navy) aplicada solo al tema claro: `#fefefe`, `#24303a`, `#27c95c`, `#1e5e4e`, `#268874`. Bootstrap 5.3 fija los colores de `.btn` en `--bs-btn-*`, por eso se agregaron overrides acotados a `[data-bs-theme="splitwise"]`. Verificado: claro usa la paleta nueva; oscuro idéntico a la línea base (botón primario sigue `rgb(13,110,253)`). Sin cambios de layout.
 
+- PR #23 mergeado (16:09:34Z) como `681bc88`. El dashboard de Render seguía anclado a `6984902` (auto-deploy no disparado) → el usuario hizo **Manual Deploy** pendiente de confirmar.
+- `npm audit --omit=dev` en `server/` daba 4 vulnerabilities (2 moderate, 1 high, 1 critical): `proxy-addr` 2.0.7 (critical, vía express; relevante porque `TRUST_PROXY` está activo), `body-parser` 2.3.0 (high), `qs` 6.15.3 y `ip-address` 10.3.1 (moderate). Con autorización del usuario se aplicó `npm audit fix` en `server/`: **0 vulnerabilidades en producción**; quedan 18 moderadas solo de Jest (dev, no desplegadas). `package.json` intacto, solo `server/package-lock.json`. Tests 18/18.
+
 ## Próximos pasos
 
-1. Mergear el PR #23 (`ui/palette-option-3` → `main`) y confirmar el deploy con la paleta nueva en modo claro.
+1. Mergear el PR #24 (`fix/npm-audit-prod` → `main`) y confirmar el deploy.
+2. Confirmar que el Manual Deploy del PR #23 dejó `/api/version` con `commit: 681bc88` y `/style.css` con `#27c95c`.
 
 ## Restricciones vigentes
 
 - `git add`/`commit`/`push` y creación de PR autorizados por el usuario; el usuario mergea los PR en la web.
 - Sin leer ni reproducir valores de `server/.env`.
 - Los dos hallazgos ALTO de secretos en archivos de log se dejan intactos salvo autorización.
-- Sin cambios de dependencias, versiones o upgrade de OpenCode sin autorización.
+- Sin cambios de dependencias, versiones o upgrade de OpenCode sin autorización (excepto el fix auditado autorizado para este PR).
