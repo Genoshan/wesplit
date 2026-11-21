@@ -18,6 +18,15 @@ function normalizeCurrency(value) {
     return /^[A-Z]{3}$/.test(code) ? code : null;
 }
 
+// Misma regla que los pagos: fecha calendario completa YYYY-MM-DD. Sin esto,
+// un valor arbitrario llega al front y rompe formatDate / el filtro por mes.
+function isValidDateString(value) {
+    const clean = String(value ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+    const parsed = new Date(`${clean}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().split('T')[0] === clean;
+}
+
 async function getGroupMembers(groupId, statuses = ['active']) {
     const placeholders = statuses.map(() => '?').join(', ');
     const result = await db.execute(`
@@ -527,8 +536,8 @@ router.post('/:id/expenses', async (req, res) => {
         if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
             return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
         }
-        if (!date) {
-            return res.status(400).json({ error: 'La fecha es requerida' });
+        if (!isValidDateString(date)) {
+            return res.status(400).json({ error: 'Fecha inválida (use YYYY-MM-DD)' });
         }
 
         const memberCheck = await db.execute(
@@ -636,8 +645,8 @@ router.put('/:id/expenses/:expenseId', async (req, res) => {
         if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
             return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
         }
-        if (!date) {
-            return res.status(400).json({ error: 'La fecha es requerida' });
+        if (!isValidDateString(date)) {
+            return res.status(400).json({ error: 'Fecha inválida (use YYYY-MM-DD)' });
         }
 
         // Se incluyen inactivos para no perder las partes históricas al editar.
@@ -844,10 +853,7 @@ router.post('/:id/payments', async (req, res) => {
             return res.status(400).json({ error: 'No podés pagarte a vos mismo' });
         }
         const cleanDate = String(date || new Date().toISOString().split('T')[0]);
-        const parsedDate = new Date(`${cleanDate}T00:00:00Z`);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate) ||
-            Number.isNaN(parsedDate.getTime()) ||
-            parsedDate.toISOString().split('T')[0] !== cleanDate) {
+        if (!isValidDateString(cleanDate)) {
             return res.status(400).json({ error: 'Fecha inválida' });
         }
 
@@ -966,7 +972,13 @@ router.get('/:id/export/csv', async (req, res) => {
         const currency = normalizeCurrency(group.base_currency) || 'UYU';
         const members = await getGroupMembers(groupId, ['active', 'inactive']);
         const nameOf = username => members.find(m => m.username === username)?.name || username;
-        const esc = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        // Las comillas se duplican y los valores que podrían interpretarse como
+        // fórmula en Excel se prefijan con "'" (inyección de fórmulas en CSV).
+        const esc = value => {
+            let text = String(value ?? '');
+            if (/^\s*[=+\-@]/.test(text)) text = `'${text}`;
+            return `"${text.replace(/"/g, '""')}"`;
+        };
 
         const expensesResult = await db.execute(
             'SELECT date, description, amount, category, payer FROM group_expenses WHERE group_id = ? ORDER BY date DESC, id DESC',

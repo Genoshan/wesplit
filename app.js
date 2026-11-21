@@ -1,4 +1,5 @@
 const themeKey = 'seg_theme';
+const groupKey = 'seg_group';
 const defaultTheme = 'splitwise';
 let categoryChartInstance = null;
 let allExpenses = [];
@@ -20,6 +21,11 @@ function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
+}
+
+function rememberGroup(groupId) {
+    if (groupId == null) localStorage.removeItem(groupKey);
+    else localStorage.setItem(groupKey, String(groupId));
 }
 
 const initialTheme = localStorage.getItem(themeKey) || defaultTheme;
@@ -158,13 +164,16 @@ async function loadAuth() {
         currentUser = { username: data.user, name: data.name || data.user, global_role: data.global_role };
 
         if (data.groups && data.groups.length > 0) {
-            // Conservar el grupo activo si sigue disponible (recién creado o
-            // recién aceptado). Si no, volver al default.
-            const kept = data.groups.find(g => g.id == currentGroupId);
+            // Conservar el grupo activo si sigue disponible (en memoria, recién
+            // creado/aceptado, o guardado en localStorage tras un reload).
+            const storedGroupId = localStorage.getItem(groupKey);
+            const kept = data.groups.find(g => g.id == currentGroupId)
+                || data.groups.find(g => g.id == storedGroupId);
             const chosen = kept || data.defaultGroup || data.groups[0];
             currentGroupId = chosen.id;
             currentGroupName = chosen.name;
             currentGroupCurrency = chosen.base_currency || chosen.currency || 'UYU';
+            rememberGroup(currentGroupId);
         }
 
         document.getElementById('login-screen').hidden = true;
@@ -182,6 +191,7 @@ async function loadAuth() {
 }
 
 async function logout() {
+    rememberGroup(null);
     try {
         await fetch('/api/logout', { method: 'POST' });
     } catch (e) {
@@ -220,6 +230,7 @@ function renderGroupSelector() {
             if (groupBadge) groupBadge.textContent = currentGroupName;
             const handleGroupChange = () => {
                 currentGroupId = parseInt(selector.value);
+                rememberGroup(currentGroupId);
                 currentGroupMembers = [];
                 const selected = data.groups.find(g => g.id == currentGroupId);
                 currentGroupName = selected ? selected.name : null;
@@ -269,6 +280,7 @@ async function confirmCreateGroup() {
     try {
         const result = await apiPost('/api/groups', { name, base_currency: currency });
         currentGroupId = result.id;
+        rememberGroup(result.id);
         currentGroupName = name;
         const modal = bootstrap.Modal.getInstance(document.getElementById('createGroupModal'));
         modal.hide();
@@ -302,6 +314,7 @@ async function confirmDeleteGroup() {
             currentGroupId = null;
             currentGroupName = null;
         }
+        rememberGroup(currentGroupId);
         await loadAuth();
     } catch (err) {
         Swal.fire({ icon: 'error', title: 'Error', text: err.message });
@@ -447,7 +460,10 @@ async function acceptInvitation(id) {
         const pending = await apiGet('/api/groups/invitations');
         const accepted = pending.find(i => i.id === id);
         await apiPost(`/api/groups/invitations/${id}/accept`, {});
-        if (accepted) currentGroupId = accepted.group_id;
+        if (accepted) {
+            currentGroupId = accepted.group_id;
+            rememberGroup(currentGroupId);
+        }
         await loadAuth();
         await renderInvitations();
         Swal.fire({ icon: 'success', title: 'Invitación aceptada', text: 'Ya podés ver el grupo.' });

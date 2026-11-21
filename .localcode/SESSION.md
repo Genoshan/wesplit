@@ -54,7 +54,8 @@
 - Tema claro refinado estilo **Dashboard SaaS** (referencia Dribbble de Apoorv Arora): cards con radio 14px y sombras suaves, balance 16px, inputs/botones 10px, tab activa con fondo `#f8f9fa`, tipografía de montos más marcada. Todo acotado a `[data-bs-theme="splitwise"]`; oscuro sin cambios.
 - `index.html` incluye `<meta name="darkreader-lock">` y el CSS usa `color-scheme: only light/dark` para que Dark Reader / auto-dark no pisen el tema.
 - Variables `-bs-*` del bloque oscuro completadas: encabezados de tabla legibles (fix de "Liquidaciones").
-- QA: `docs/QA_TESTING_PROMPT.md` (prompt reutilizable) y `docs/QA_REVIEW_2026-11-21.md` (resultados). Jest 9/9 y E2E manual OK; deuda menor documentada.
+- QA: `docs/QA_TESTING_PROMPT.md` (prompt reutilizable) y `docs/QA_REVIEW_2026-11-21.md` (resultados). Jest 9/9 y E2E manual OK.
+- Correcciones de QA: persistencia de grupo (`seg_group`), validación estricta de fecha en gastos y escape de fórmulas en CSV. Pendientes/decididas por el usuario: moneda de pagos, pagador en edición, docs desactualizados, cobertura de tests.
 
 ## Próximos pasos
 
