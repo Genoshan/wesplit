@@ -192,6 +192,14 @@ app.post('/api/register', authActionLimiter, async (req, res) => {
             sql: 'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
             args: [groupId, userId, 'admin']
         });
+        // Sembrar categorías por defecto para el grupo personal
+        const DEFAULT_CATEGORIES = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+        for (const catName of DEFAULT_CATEGORIES) {
+            await db.execute({
+                sql: 'INSERT OR IGNORE INTO group_categories (group_id, name, created_by) VALUES (?, ?, ?)',
+                args: [groupId, catName, userId]
+            });
+        }
 
         // Si este username es el configurado en SUPERADMIN_USERNAME, se promueve acá
         // para no tener que reiniciar el servidor después de crearlo.

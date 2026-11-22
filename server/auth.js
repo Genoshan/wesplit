@@ -538,6 +538,14 @@ async function handleGoogleCallback(code, state, cookieToken) {
                 sql: 'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)',
                 args: [groupId, dbUser.id, 'admin']
             });
+            // Sembrar categorías por defecto para el grupo personal
+            const DEFAULT_CATEGORIES = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+            for (const catName of DEFAULT_CATEGORIES) {
+                await db.execute({
+                    sql: 'INSERT OR IGNORE INTO group_categories (group_id, name, created_by) VALUES (?, ?, ?)',
+                    args: [groupId, catName, dbUser.id]
+                });
+            }
 
             console.log(`[GOOGLE AUTH] Nuevo usuario creado: ${username} (id: ${dbUser.id}), grupo Mis gastos (ID: ${groupId})`);
         } else {

@@ -14,6 +14,7 @@ let currentGroupId = null;
 let currentGroupName = null;
 let currentGroupCurrency = 'UYU';
 let currentGroupMembers = [];
+let currentGroupCategories = [];
 let selectorGroups = [];
 let currentSplitMode = 'equal';
 let editingExpenseId = null;
@@ -24,6 +25,7 @@ function escapeHtml(value) {
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
 }
+function escapeAttr(value) { return escapeHtml(value); }
 
 // Misma política que server/password.js. El servidor vuelve a validar; esto
 // solo da feedback inmediato y evita un viaje innecesario.
@@ -67,6 +69,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('expense-form')?.addEventListener('submit', (e) => {
         e.preventDefault();
         submitExpense();
+    });
+    document.getElementById('manage-categories-btn')?.addEventListener('click', () => {
+        const box = document.getElementById('category-manager');
+        if (!box) return;
+        box.hidden = !box.hidden;
+        if (!box.hidden) renderCategoryManager();
+    });
+    document.getElementById('add-category-btn')?.addEventListener('click', addCategory);
+    document.getElementById('new-category-name')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addCategory(); }
+    });
+    document.getElementById('category-manager-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-category-id]');
+        if (!btn) return;
+        deleteCategory(Number(btn.dataset.categoryId), btn.dataset.categoryName || '');
     });
 
     // Delegación: estas listas se regeneran con innerHTML.
@@ -447,11 +464,26 @@ async function renderMembers() {
         const members = data.members || [];
         currentGroupMembers = members;
         currentGroupCurrency = data.base_currency || currentGroupCurrency;
+        currentGroupCategories = Array.isArray(data.categories) ? data.categories : [];
+        renderCategoryOptions();
         renderPayerOptions();
         renderPaymentOptions();
         updateSplitDisplay();
+        // Copia contextual: en grupos personales, invitar es opcional.
+        const activeMembers = members.filter(x => x.status === 'active');
+        const pendingMembers = members.filter(x => x.status === 'pending');
+        const isPersonalSpace = (data.name || '') === 'Mis gastos' && activeMembers.length <= 1 && pendingMembers.length === 0;
+        const eyebrow = document.getElementById('members-eyebrow');
+        const title = document.getElementById('members-title');
+        const help = document.getElementById('members-help');
+        if (eyebrow) eyebrow.textContent = isPersonalSpace ? 'Personas, cuando haga falta' : 'Personas del grupo';
+        if (title) title.textContent = 'Personas';
+        if (help) help.textContent = isPersonalSpace
+            ? 'Si por ahora usás este espacio para tus gastos, podés dejarlo así. Cuando quieras compartir algo, invitás a alguien desde acá.'
+            : 'Acá podés ver quién forma parte del grupo e invitar a alguien más cuando lo necesites.';
+
         if (members.length === 0) {
-            container.innerHTML = '<p class="text-muted">Todavía no hay nadie más en el grupo.</p>';
+            container.innerHTML = '<p class="text-muted">Todavía no hay nadie más en este espacio.</p>';
             return;
         }
         const activeAdmins = members.filter(x => x.member_role === 'admin' && x.status === 'active').length;
@@ -505,6 +537,8 @@ async function renderInvitations() {
         const invitations = await apiGet('/api/groups/invitations');
         if (countBadge) countBadge.textContent = invitations.length;
         if (labelEl) labelEl.textContent = invitations.length === 1 ? 'invitación nueva' : 'invitaciones nuevas';
+        const invitationsEyebrow = document.getElementById('invitations-eyebrow');
+        if (invitationsEyebrow) invitationsEyebrow.textContent = invitations.length ? 'Invitaciones' : 'Invitaciones';
         if (headerBtn) headerBtn.hidden = invitations.length === 0;
         if (!container || !panel) return;
         panel.hidden = invitations.length === 0;
@@ -1099,6 +1133,85 @@ function renderPayerOptionsFor(selectId) {
     }).join('') || '<option value="me">Vos</option>';
 }
 
+function renderCategoryOptions() {
+    const names = (currentGroupCategories || []).map(c => c.name).filter(Boolean);
+    const fallback = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+    const list = names.length ? names : fallback;
+    const selects = [
+        { id: 'expense-category', allLabel: null },
+        { id: 'edit-category', allLabel: null },
+        { id: 'category-filter', allLabel: 'Todas las categorías' }
+    ];
+    selects.forEach(({ id, allLabel }) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        const opts = [];
+        if (allLabel) opts.push(`<option value="">${allLabel}</option>`);
+        list.forEach(name => opts.push(`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`));
+        sel.innerHTML = opts.join('');
+        if (prev && (allLabel ? (prev === '' || list.includes(prev)) : list.includes(prev))) sel.value = prev;
+        if (!allLabel && !sel.value) sel.value = list.includes('Otros') ? 'Otros' : list[0];
+    });
+    renderCategoryManager();
+}
+
+function renderCategoryManager() {
+    const container = document.getElementById('category-manager-list');
+    if (!container) return;
+    const cats = currentGroupCategories || [];
+    if (!cats.length) {
+        container.innerHTML = '<p class="text-muted small mb-0">No hay categorías todavía.</p>';
+        return;
+    }
+    container.innerHTML = cats.map(c => `
+        <span class="badge rounded-pill text-bg-light border category-chip">
+            ${escapeHtml(c.name)}
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1 category-delete-btn" data-category-id="${c.id}" data-category-name="${escapeAttr(c.name)}" aria-label="Borrar categoría ${escapeAttr(c.name)}">&times;</button>
+        </span>
+    `).join('');
+}
+
+async function addCategory() {
+    if (!currentGroupId) return;
+    const input = document.getElementById('new-category-name');
+    const name = (input?.value || '').trim();
+    if (!name) return;
+    try {
+        await apiPost(`/api/groups/${currentGroupId}/categories`, { name });
+        if (input) input.value = '';
+        await refreshCategories();
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'No se pudo agregar', text: `${err.message} Probá de nuevo en un segundo.` });
+    }
+}
+
+async function deleteCategory(id, name) {
+    if (!currentGroupId) return;
+    const confirm = await Swal.fire({
+        icon: 'warning',
+        title: 'Borrar categoría',
+        text: `¿Borrar "${name}"? Solo se puede si no tiene gastos asociados.`,
+        showCancelButton: true,
+        confirmButtonText: 'Borrar',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+        await apiDelete(`/api/groups/${currentGroupId}/categories/${id}`);
+        await refreshCategories();
+    } catch (err) {
+        Swal.fire({ icon: 'error', title: 'No se pudo borrar', text: `${err.message}` });
+    }
+}
+
+async function refreshCategories() {
+    if (!currentGroupId) return;
+    const data = await apiGet(`/api/groups/${currentGroupId}`);
+    currentGroupCategories = Array.isArray(data.categories) ? data.categories : [];
+    renderCategoryOptions();
+}
+
 async function updateEditSplitDisplay(existingSplits = []) {
     const display = document.getElementById('edit-split-display');
     if (!display) return;
@@ -1453,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderPaymentOptions();
             }
         }
-        if (title) title.textContent = paymentMode ? 'Registrar pago' : '¿Quién pagó y cuánto?';
+        if (title) title.textContent = paymentMode ? 'Registrar pago' : '¿Qué querés registrar?';
     });
 
     // Load

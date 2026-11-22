@@ -18,7 +18,7 @@
             <div class="section-heading">
                 <p class="eyebrow">WeSplit</p>
                 <h1>Dividí gastos, no discusiones</h1>
-                <p class="small text-muted mb-0">Cargá el gasto, nosotros calculamos quién debe cuánto.</p>
+                <p class="small text-muted mb-0">Anotá tus gastos, solo o con otras personas. Si compartís, WeSplit hace las cuentas por vos.</p>
             </div>
             <form id="login-form">
                 <label for="login-username">Usuario o email</label>
@@ -41,7 +41,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="small text-muted mb-3">Tu grupo "Mis gastos" ya va a estar listo. Sin tarjeta, sin invitaciones previas.</p>
+                            <p class="small text-muted mb-3">Tu espacio "Mis gastos" queda listo para empezar. Si después querés compartir gastos, podés invitar a alguien cuando te sirva.</p>
                             <label for="reg-name">Nombre completo</label>
                             <input type="text" id="reg-name" class="form-control mb-3" placeholder="Ej. Juan Pérez" required>
                             <label for="reg-username">Username</label>
@@ -79,7 +79,7 @@
         <header class="app-header">
             <div class="header-left">
                 <h1>WeSplit</h1>
-                <span class="small text-muted ms-2 d-none d-md-inline">Tus grupos, en un solo lugar.</span>
+                <span class="small text-muted ms-2 d-none d-md-inline">Tus gastos, ordenados a tu manera.</span>
                 <span id="current-group-name" class="current-group-badge"></span>
             </div>
             <div class="header-actions">
@@ -118,12 +118,12 @@
                 <button class="nav-link" id="tab-stats" data-bs-toggle="tab" data-bs-target="#pane-stats" type="button" role="tab">Estadísticas</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-members" data-bs-toggle="tab" data-bs-target="#pane-members" type="button" role="tab">Miembros</button>
+                <button class="nav-link" id="tab-members" data-bs-toggle="tab" data-bs-target="#pane-members" type="button" role="tab">Personas</button>
             </li>
         </ul>
 
         <div id="no-groups-alert" class="alert alert-info mt-3" role="status" hidden>
-            No tenés grupos activos. Creá uno con <strong>+ Nuevo grupo</strong> para empezar a registrar gastos.
+            Tu espacio está listo. Cargá un gasto para empezar, o creá otro grupo si querés organizarte distinto.
         </div>
 
         <div class="tab-content app-tab-content" id="app-tab-content">
@@ -133,8 +133,8 @@
                     <section class="card app-card" aria-labelledby="form-title">
                         <div class="card-body p-4">
                             <div class="section-heading">
-                                <p class="eyebrow">Cargá en 10 segundos</p>
-                                <h2 id="form-title">¿Quién pagó y cuánto?</h2>
+                                <p class="eyebrow">Anotá un gasto</p>
+                                <h2 id="form-title">¿Qué querés registrar?</h2>
                                 <button type="button" id="toggle-mode-btn" class="btn btn-sm btn-outline-primary">¿Fue un pago? Cambiar</button>
                             </div>
                             <form id="expense-form" class="form-container">
@@ -145,13 +145,24 @@
                                 <label for="expense-amount">Monto</label>
                                 <input type="number" id="expense-amount" class="form-control" min="0.01" step="0.01" required>
                                 <label for="expense-category">Categoría</label>
-                                <select id="expense-category" class="form-select" required>
-                                    <option value="Alimentación">Alimentación</option>
-                                    <option value="Transporte">Transporte</option>
-                                    <option value="Ocio">Ocio</option>
-                                    <option value="Servicios">Servicios</option>
-                                    <option value="Otros">Otros</option>
-                                </select>
+                                <div class="d-flex gap-2">
+                                    <select id="expense-category" class="form-select" required>
+                                        <option value="Alimentación">Alimentación</option>
+                                        <option value="Transporte">Transporte</option>
+                                        <option value="Ocio">Ocio</option>
+                                        <option value="Servicios">Servicios</option>
+                                        <option value="Otros">Otros</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="manage-categories-btn" title="Administrar categorías">+</button>
+                                </div>
+                                <div id="category-manager" class="category-manager mt-2" hidden>
+                                    <label for="new-category-name" class="small text-muted">Nueva categoría</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" id="new-category-name" class="form-control form-control-sm" maxlength="40" placeholder="Ej. Salud">
+                                        <button type="button" class="btn btn-sm btn-primary" id="add-category-btn">Agregar</button>
+                                    </div>
+                                    <div id="category-manager-list" class="d-flex flex-wrap gap-1"></div>
+                                </div>
                                 <label for="expense-payer">Pagó</label>
                                 <select id="expense-payer" class="form-select" required>
                                     <!-- Opciones generadas con los miembros reales del grupo (app.js) -->
@@ -165,7 +176,7 @@
                                     </label>
                                     <label class="split-option">
                                         <input type="radio" name="split_mode" value="solo">
-                                        <span class="split-label">Solo pagué yo</span>
+                                        <span class="split-label">Solo para mí</span>
                                     </label>
                                     <label class="split-option">
                                         <input type="radio" name="split_mode" value="custom">
@@ -173,7 +184,7 @@
                                     </label>
                                 </div>
                                 <div id="split-display"></div>
-                                <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Cargar y dividir</button>
+                                <button type="button" class="btn btn-primary btn-action w-100" id="add-expense-btn">Guardar gasto</button>
                             </form>
                             <form id="payment-form" class="form-container" style="display:none;">
                                 <label for="payment-amount">Monto</label>
@@ -295,16 +306,17 @@
                 <section class="card app-card">
                     <div class="card-body p-4">
                         <div class="section-heading">
-                            <p class="eyebrow">Grupo</p>
-                            <h2>Tu equipo</h2>
+                            <p class="eyebrow" id="members-eyebrow">Personas, cuando haga falta</p>
+                            <h2 id="members-title">Personas</h2>
+                            <p id="members-help" class="small text-muted mb-0">Si querés compartir este grupo, podés invitar a alguien. Si por ahora lo usás para tus gastos, podés dejar esto para después.</p>
                         </div>
                         <div id="invitations-panel" class="invitations-panel mb-3" hidden>
-                            <p class="eyebrow">Te están esperando</p>
+                            <p class="eyebrow" id="invitations-eyebrow">Invitaciones</p>
                             <div id="invitations-list"></div>
                         </div>
                         <div id="members-list" class="members-list"></div>
                         <div class="mt-3">
-                            <button class="btn btn-sm btn-primary" id="invite-member-btn">+ Invitar a un amigo</button>
+                            <button class="btn btn-sm btn-primary" id="invite-member-btn">Invitar a alguien</button>
                         </div>
                     </div>
                 </section>
@@ -317,7 +329,7 @@
         <div class="modal-dialog modal-sm">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Sumá a alguien al grupo</h5>
+                    <h5 class="modal-title">Invitar a alguien</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
@@ -325,7 +337,7 @@
                     <input type="text" id="invite-username" class="form-control mb-1" placeholder="Ej. juan" list="invite-suggestions" autocomplete="off" aria-describedby="invite-help">
                     <datalist id="invite-suggestions"></datalist>
                     <div id="invite-result" class="mt-2" aria-live="polite"></div>
-                    <p id="invite-help" class="small text-muted mt-2 mb-0">Escribí 2 letras y elegí de la lista. Después acepta en Miembros. Si no tiene cuenta, se registra con Google o email.</p>
+                    <p id="invite-help" class="small text-muted mt-2 mb-0">Si querés compartir este grupo, buscá a la persona por su usuario. Si por ahora lo usás para tus gastos, podés dejar esto para después.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
@@ -350,13 +362,7 @@
                         <div class="col-12"><label for="edit-description">Descripción</label><input type="text" id="edit-description" class="form-control" required></div>
                         <div class="col-6">
                             <label for="edit-category">Categoría</label>
-                            <select id="edit-category" class="form-select">
-                                <option value="Alimentación">Alimentación</option>
-                                <option value="Transporte">Transporte</option>
-                                <option value="Ocio">Ocio</option>
-                                <option value="Servicios">Servicios</option>
-                                <option value="Otros">Otros</option>
-                            </select>
+                            <select id="edit-category" class="form-select"></select>
                         </div>
                         <div class="col-6"><label for="edit-payer">Pagó</label><select id="edit-payer" class="form-select"></select></div>
                     </div>
@@ -364,7 +370,7 @@
                     <label class="mt-3">Split</label>
                     <div class="split-mode-selector" role="radiogroup" aria-label="Tipo de división al editar">
                         <label class="split-option"><input type="radio" name="edit_split_mode" value="equal" checked><span class="split-label">Partes iguales</span></label>
-                        <label class="split-option"><input type="radio" name="edit_split_mode" value="solo"><span class="split-label">Solo pagué yo</span></label>
+                        <label class="split-option"><input type="radio" name="edit_split_mode" value="solo"><span class="split-label">Solo para mí</span></label>
                         <label class="split-option"><input type="radio" name="edit_split_mode" value="custom"><span class="split-label">Montos exactos</span></label>
                     </div>
                     <div id="edit-split-display" class="mt-2"></div>
@@ -396,7 +402,7 @@
                         <option value="ARS">ARS - Peso argentino</option>
                         <option value="BRL">BRL - Real</option>
                     </select>
-                    <p class="small text-muted mt-2 mb-0">Tu grupo "Mis gastos" siempre queda ahí. Este es extra.</p>
+                    <p class="small text-muted mt-2 mb-0">"Mis gastos" sigue disponible para lo tuyo. Este grupo es para llevar algo por separado o con otras personas.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>

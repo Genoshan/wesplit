@@ -32,7 +32,7 @@
 
 | ID | Pantalla | Texto actual → texto nuevo | Esfuerzo | Riesgo |
 |---|---|---|---|---|
-| MKT-06 | Gastos | `Agregar gasto` → `¿Quién pagó y cuánto?`; preview → `La cuenta queda así: cada uno debe X. Sin calcular, sin discutir.` | S | La preview sigue dependiendo de datos reales |
+| MKT-06 | Gastos | `Agregar gasto` → `¿Qué querés registrar?`; CTA → `Guardar gasto`; preview → `La cuenta queda así: cada uno debe X. Sin calcular, sin discutir.` | S | La preview sigue dependiendo de datos reales |
 | MKT-07 | Vacíos y errores | Swal `Error` → `No se pudo completar` + `Probá de nuevo en un segundo.`; alinear el alert de `+ Grupo` con MKT-03 | S | Ninguno |
 | MKT-08 | Modales | `Crear` → `Crear grupo`; `Guardar cambios` → `Actualizar cuenta`; `Eliminar` → `Eliminar grupo` | S | No prometer borrado fácil en cuentas Google |
 | MKT-09 | Estadísticas | `Análisis` → `En qué se va la plata`; `Distribución por categoría` → `Tu gasto, en partes` | S | Solo copy; los colores del chart quedan para P2 |
