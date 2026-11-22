@@ -94,7 +94,9 @@ if (process.env.TRUST_PROXY) {
 // Rate limiting
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 60,
+    // En local se corre la suite completa contra un solo proceso: 60 req/min
+    // se agota con 4 suites. Producción conserva el límite de siempre.
+    max: IS_PRODUCTION ? 60 : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Demasiadas peticiones, intentá de nuevo en un minuto' }

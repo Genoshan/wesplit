@@ -1,6 +1,6 @@
 # Especificación — Backoffice de WeSplit
 
-> Estado: **Fase 1 implementada y testeada localmente** (rama `feat/admin-phase1`). Fases 2–4 pendientes.
+> Estado: **Fases 1 y 2 implementadas y testeadas localmente** (rama `feat/admin-phase2`). Fases 3–4 pendientes.
 > Decisiones confirmadas por el usuario (2026-11-21): bootstrap por ENV, misma SPA en `/admin`,
 > métricas agregadas + administración de usuarios/sesiones/recursos + auditoría.
 >
@@ -119,6 +119,18 @@ Todas se devuelven ya agregadas. Ningún endpoint de métricas devuelve filas de
 - UI verificada en navegador: tarjetas y tablas, enlace solo para superadmin, usuario normal ve "restringida a superadmins", tema `splitwise-dark` respetado en `/admin`.
 - `npm test` con `BASE_URL=http://localhost:4002` → **29/29 tests**, 4 suites (se agregó `tests/admin.int.test.js`).
 - `node --check` y `git diff --check` limpios.
+
+## Verificación local de la Fase 2 (2026-11-21)
+
+- Rama `feat/admin-phase2` creada desde `origin/main` (ya incluye #31 y #32).
+- Servidor en `PORT=4002` contra BD local descartable (`file:admin-test-phase2.db`), sin tocar la BD remota ni leer secretos. `SUPERADMIN_USERNAME=adminqa`.
+- `users.status`: la baja bloquea `/api/login` (incluido el fallback legacy y Google), cierra las sesiones abiertas en el middleware y **no borra datos**.
+- Endpoints nuevos: `GET /users` (búsqueda, filtro por estado, `isSuperadmin`, sin emails), `POST /users/:id/disable|enable`, `DELETE /users/:id/sessions`, `GET /audit`. Todos pasan por `requireSuperadmin`; las escrituras exigen `reason` no vacío y tienen rate limit propio.
+- Reglas aplicadas: nadie puede desactivarse a sí mismo ni a otro superadmin; no se pueden revocar las propias sesiones.
+- UI: tabla de usuarios con filtros, badges de estado y superadmin, y modal que pide el motivo antes de cada acción. La auditoría muestra actor, objetivo y motivo.
+- `npm test` con `BASE_URL=http://localhost:4002` → **39/39 tests**, 4 suites.
+- Smoke en navegador: login como `adminqa`, panel cargado, badge `Superadmin`, 6 eventos de auditoría visibles, sin errores de consola.
+- `node --check` y `git diff --check` limpios. Servidor detenido y BD temporal eliminada.
 
 ## 8. Decisiones por defecto propuestas
 
