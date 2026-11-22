@@ -81,6 +81,17 @@ async function verifyPasswordDB(username, password) {
     return { id: Number(user.id), username: user.username, global_role: user.global_role || user.role || 'member', name: user.name || user.username };
 }
 
+async function isUserDisabled(userId) {
+    if (!userId) return false;
+    try {
+        const result = await db.execute('SELECT status FROM users WHERE id = ?', [Number(userId)]);
+        return result.rows[0]?.status === 'disabled';
+    } catch (e) {
+        console.error('[AUTH] Error leyendo estado del usuario:', e);
+        return false;
+    }
+}
+
 async function verifyPassword(username, password) {
     // Primero intenta DB
     const dbUser = await verifyPasswordDB(username, password);
@@ -181,6 +192,11 @@ async function authMiddleware(req, res, next) {
         if (userResult.rows.length === 0) {
             return res.status(401).json({ error: 'Usuario no encontrado' });
         }
+        // Un usuario dado de baja pierde cualquier sesión ya abierta.
+        if (userResult.rows[0].status === 'disabled') {
+            await deleteSession(token);
+            return res.status(401).json({ error: 'Sesión no válida' });
+        }
 
         req.user = { username: userResult.rows[0].username, global_role: userResult.rows[0].global_role || userResult.rows[0].role || 'member', userId: Number(userResult.rows[0].id), name: userResult.rows[0].name || userResult.rows[0].username };
 
@@ -205,6 +221,9 @@ async function login(username, password) {
         console.log(`[AUTH] FALLO: credenciales inválidas para user="${username}"`);
         return null;
     }
+    // La baja de cuenta bloquea también el login legacy y el de Google.
+    // Se responde como credenciales inválidas para no revelar el estado.
+    if (await isUserDisabled(user.id)) return null;
 
     // Devolver directamente el token creado. Antes se re-leía con
     // ORDER BY created_at DESC (granularidad de segundo), lo que podía
@@ -528,6 +547,12 @@ async function handleGoogleCallback(code, state, cookieToken) {
             }
             dbUser.name = dbUser.name || googleName || dbUser.username;
             console.log(`[GOOGLE AUTH] Usuario existente: ${dbUser.username} (id: ${dbUser.id})`);
+        }
+
+        // Una cuenta dada de baja no puede reingresar ni por Google.
+        if (await isUserDisabled(dbUser.id)) {
+            googleSessions.delete(state);
+            return { error: 'Esta cuenta no está habilitada para ingresar' };
         }
 
         // Crear sesión

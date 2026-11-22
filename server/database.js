@@ -82,6 +82,19 @@ async function initDB() {
         )
     `);
 
+    // Auditoría del backoffice: solo escritura desde el servidor, lectura en la UI.
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS admin_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id INTEGER,
+            reason TEXT,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+        )
+    `);
+
     // ────────────────────────────────────────
     // Tablas de grupos
     // ────────────────────────────────────────
@@ -219,6 +232,15 @@ async function initDB() {
     } catch (e) {
         if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
             console.log('[DB] Columna auth_provider puede que ya exista');
+        }
+    }
+    // Estado global de la cuenta. La baja no borra datos: solo bloquea el ingreso.
+    try {
+        await db.execute('ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT \'active\'');
+        console.log('[DB] Columna status agregada a users');
+    } catch (e) {
+        if (!e.message.toLowerCase().includes('duplicate') && !e.message.toLowerCase().includes('already exists')) {
+            console.log('[DB] Columna status puede que ya exista');
         }
     }
 

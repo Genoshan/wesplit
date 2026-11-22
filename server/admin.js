@@ -1,6 +1,7 @@
-// Backoffice Fase 1: rol global superadmin + métricas agregadas.
-// Ningún endpoint devuelve filas de usuario: solo números y agrupaciones.
+// Backoffice: rol global superadmin, métricas agregadas y administración acotada.
+// Las vistas de usuario son curadas: nunca se devuelven emails, hashes ni tokens.
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const db = require('./database');
 const { authMiddleware } = require('./auth');
 
@@ -109,6 +110,198 @@ router.get('/overview', async (req, res) => {
     } catch (err) {
         console.error('[ADMIN] Error en /overview:', err);
         res.status(500).json({ error: 'No se pudieron calcular las métricas' });
+    }
+});
+
+// ────────────────────────────────────────
+// Fase 2 — Usuarios, sesiones y auditoría
+// ────────────────────────────────────────
+
+const writeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas acciones de administración, esperá un minuto' }
+});
+
+const toIso = seconds => seconds ? new Date(Number(seconds) * 1000).toISOString() : null;
+const parseId = value => {
+    const id = Number(value);
+    return Number.isInteger(id) && id > 0 ? id : null;
+};
+
+function reasonOf(req) {
+    return String(req.body?.reason ?? '').trim().slice(0, 300);
+}
+
+function requireReason(req, res) {
+    const reason = reasonOf(req);
+    if (!reason) {
+        res.status(400).json({ error: 'El motivo es obligatorio y debe aparecer en la auditoría' });
+        return null;
+    }
+    return reason;
+}
+
+async function writeAudit(actorId, action, targetType, targetId, reason) {
+    await db.execute({
+        sql: `INSERT INTO admin_audit_log (actor_id, action, target_type, target_id, reason)
+              VALUES (?, ?, ?, ?, ?)`,
+        args: [Number(actorId), action, targetType, targetId, reason]
+    });
+}
+
+async function findUser(id) {
+    const result = await db.execute('SELECT id, username, status FROM users WHERE id = ?', [id]);
+    return result.rows[0] || null;
+}
+
+router.get('/users', async (req, res) => {
+    try {
+        const search = String(req.query.search ?? '').trim().slice(0, 80).toLowerCase();
+        const status = ['active', 'disabled'].includes(req.query.status) ? req.query.status : null;
+        const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+
+        const where = [];
+        const args = [];
+        if (search) {
+            where.push('LOWER(u.username) LIKE ?');
+            args.push(`%${search}%`);
+        }
+        if (status) {
+            where.push('u.status = ?');
+            args.push(status);
+        }
+        args.push(limit);
+
+        const result = await db.execute({
+            sql: `SELECT u.id, u.username, u.status,
+                         COALESCE(u.global_role, u.role, 'member') AS role,
+                         u.auth_provider, u.created_at,
+                         (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen,
+                         (SELECT COUNT(*) FROM group_members gm WHERE gm.user_id = u.id) AS group_count,
+                         (SELECT 1 FROM superadmins sa WHERE sa.user_id = u.id) AS is_superadmin
+                  FROM users u
+                  ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+                  ORDER BY u.id
+                  LIMIT ?`,
+            args
+        });
+
+        res.json({
+            users: result.rows.map(r => ({
+                id: Number(r.id),
+                username: r.username,
+                status: r.status === 'disabled' ? 'disabled' : 'active',
+                role: r.role || 'member',
+                authProvider: r.auth_provider || 'unknown',
+                groupCount: Number(r.group_count ?? 0),
+                isSuperadmin: r.is_superadmin === 1 || r.is_superadmin === true,
+                createdAt: toIso(r.created_at),
+                lastSeen: toIso(r.last_seen)
+            })),
+            limit
+        });
+    } catch (err) {
+        console.error('[ADMIN] Error en /users:', err);
+        res.status(500).json({ error: 'No se pudo listar los usuarios' });
+    }
+});
+
+router.post('/users/:id/disable', writeLimiter, async (req, res) => {
+    try {
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'ID de usuario inválido' });
+        const reason = requireReason(req, res);
+        if (!reason) return;
+
+        const target = await findUser(id);
+        if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+        if (id === Number(req.user.userId)) return res.status(400).json({ error: 'No podés desactivar tu propia cuenta' });
+        if (await isSuperadmin(id)) return res.status(400).json({ error: 'No se puede desactivar a un superadmin' });
+        if (target.status === 'disabled') return res.status(400).json({ error: 'El usuario ya está desactivado' });
+
+        await db.execute("UPDATE users SET status = 'disabled' WHERE id = ?", [id]);
+        const sessions = await db.execute('DELETE FROM sessions WHERE user_id = ?', [id]);
+        await writeAudit(req.user.userId, 'user.disable', 'user', id, reason);
+        console.log(`[ADMIN] Usuario ${target.username} (id ${id}) desactivado por ${req.user.username}`);
+        res.json({ message: 'Usuario desactivado', userId: id, sessionsRevoked: Number(sessions.rowsAffected ?? 0) });
+    } catch (err) {
+        console.error('[ADMIN] Error desactivando usuario:', err);
+        res.status(500).json({ error: 'No se pudo desactivar el usuario' });
+    }
+});
+
+router.post('/users/:id/enable', writeLimiter, async (req, res) => {
+    try {
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'ID de usuario inválido' });
+        const reason = requireReason(req, res);
+        if (!reason) return;
+
+        const target = await findUser(id);
+        if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+        if (target.status !== 'disabled') return res.status(400).json({ error: 'El usuario ya está activo' });
+
+        await db.execute("UPDATE users SET status = 'active' WHERE id = ?", [id]);
+        await writeAudit(req.user.userId, 'user.enable', 'user', id, reason);
+        console.log(`[ADMIN] Usuario ${target.username} (id ${id}) reactivado por ${req.user.username}`);
+        res.json({ message: 'Usuario reactivado', userId: id });
+    } catch (err) {
+        console.error('[ADMIN] Error reactivando usuario:', err);
+        res.status(500).json({ error: 'No se pudo reactivar el usuario' });
+    }
+});
+
+router.delete('/users/:id/sessions', writeLimiter, async (req, res) => {
+    try {
+        const id = parseId(req.params.id);
+        if (!id) return res.status(400).json({ error: 'ID de usuario inválido' });
+        const reason = requireReason(req, res);
+        if (!reason) return;
+
+        const target = await findUser(id);
+        if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+        if (id === Number(req.user.userId)) return res.status(400).json({ error: 'No podés revocar tus propias sesiones' });
+
+        const sessions = await db.execute('DELETE FROM sessions WHERE user_id = ?', [id]);
+        await writeAudit(req.user.userId, 'user.sessions_revoke', 'user', id, reason);
+        console.log(`[ADMIN] Sesiones de ${target.username} (id ${id}) revocadas por ${req.user.username}`);
+        res.json({ message: 'Sesiones revocadas', userId: id, revoked: Number(sessions.rowsAffected ?? 0) });
+    } catch (err) {
+        console.error('[ADMIN] Error revocando sesiones:', err);
+        res.status(500).json({ error: 'No se pudieron revocar las sesiones' });
+    }
+});
+
+router.get('/audit', async (req, res) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+        const result = await db.execute({
+            sql: `SELECT a.id, a.action, a.target_type, a.target_id, a.reason, a.created_at,
+                         a.actor_id, u.username AS actor
+                  FROM admin_audit_log a
+                  LEFT JOIN users u ON u.id = a.actor_id
+                  ORDER BY a.id DESC
+                  LIMIT ?`,
+            args: [limit]
+        });
+        res.json({
+            events: result.rows.map(r => ({
+                id: Number(r.id),
+                action: r.action,
+                actor: r.actor || `usuario #${r.actor_id ?? ''}`,
+                targetType: r.target_type,
+                targetId: r.target_id === null || r.target_id === undefined ? null : Number(r.target_id),
+                reason: r.reason || '',
+                createdAt: toIso(r.created_at)
+            })),
+            limit
+        });
+    } catch (err) {
+        console.error('[ADMIN] Error en /audit:', err);
+        res.status(500).json({ error: 'No se pudo leer la auditoría' });
     }
 });
 
