@@ -178,6 +178,15 @@ router.post('/', async (req, res) => {
             args: [result.lastInsertRowid, userId, 'admin']
         });
 
+        // Sembrar categorías por defecto para el grupo nuevo
+        const DEFAULT_CATEGORIES = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+        for (const catName of DEFAULT_CATEGORIES) {
+            await db.execute({
+                sql: 'INSERT OR IGNORE INTO group_categories (group_id, name, created_by) VALUES (?, ?, ?)',
+                args: [result.lastInsertRowid, catName, userId]
+            });
+        }
+
         console.log(`[GROUPS] Grupo creado: "${cleanName}" por ${username}`);
         res.json({
             id: Number(result.lastInsertRowid),
@@ -226,8 +235,16 @@ router.get('/:id', async (req, res) => {
             ORDER BY CASE gm.status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, gm.role ASC, u.username ASC
         `, [groupId]);
 
+        const categoriesResult = await db.execute(`
+            SELECT id, name, created_at
+            FROM group_categories
+            WHERE group_id = ?
+            ORDER BY CASE WHEN name = 'Otros' THEN 1 ELSE 0 END, name COLLATE NOCASE ASC
+        `, [groupId]);
+
         const group = groupResult.rows[0];
         group.members = membersResult.rows;
+        group.categories = categoriesResult.rows;
 
         res.json(group);
     } catch (err) {
@@ -749,6 +766,107 @@ router.delete('/:id/expenses/:expenseId', async (req, res) => {
         res.json({ message: 'Gasto eliminado con éxito' });
     } catch (err) {
         console.error('[GROUPS] Error eliminando gasto:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// GET /:id/categories — listar categorías del grupo
+// ────────────────────────────────────────
+router.get('/:id/categories', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const { userId } = req.user;
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+        const result = await db.execute(
+            `SELECT id, name, created_at FROM group_categories WHERE group_id = ?
+             ORDER BY CASE WHEN name = 'Otros' THEN 1 ELSE 0 END, name COLLATE NOCASE ASC`,
+            [groupId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[GROUPS] Error listando categorías:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// POST /:id/categories — crear categoría personalizada
+// ────────────────────────────────────────
+router.post('/:id/categories', async (req, res) => {
+    try {
+        const groupId = req.params.id;
+        const { userId } = req.user;
+        const rawName = (req.body.name || '').trim();
+        if (!rawName) return res.status(400).json({ error: 'El nombre de la categoría es requerido' });
+        if (rawName.length > 40) return res.status(400).json({ error: 'Nombre demasiado largo (máximo 40 caracteres)' });
+
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const dup = await db.execute(
+            'SELECT id FROM group_categories WHERE group_id = ? AND name = ? COLLATE NOCASE',
+            [groupId, rawName]
+        );
+        if (dup.rows.length > 0) {
+            return res.status(409).json({ error: 'Esa categoría ya existe en este grupo' });
+        }
+
+        const result = await db.execute({
+            sql: 'INSERT INTO group_categories (group_id, name, created_by) VALUES (?, ?, ?)',
+            args: [groupId, rawName, userId]
+        });
+        res.json({ id: Number(result.lastInsertRowid), name: rawName });
+    } catch (err) {
+        console.error('[GROUPS] Error creando categoría:', err);
+        res.status(500).json({ error: 'Error interno en la base de datos' });
+    }
+});
+
+// ────────────────────────────────────────
+// DELETE /:id/categories/:categoryId — borrar categoría personalizada
+// ────────────────────────────────────────
+router.delete('/:id/categories/:categoryId', async (req, res) => {
+    try {
+        const { id: groupId, categoryId } = req.params;
+        const { userId } = req.user;
+        const memberCheck = await db.execute(
+            'SELECT status FROM group_members WHERE group_id = ? AND user_id = ?',
+            [groupId, userId]
+        );
+        if (memberCheck.rows.length === 0 || memberCheck.rows[0].status !== 'active') {
+            return res.status(403).json({ error: 'No perteneces a este grupo' });
+        }
+
+        const cat = await db.execute(
+            'SELECT id, name FROM group_categories WHERE id = ? AND group_id = ?',
+            [categoryId, groupId]
+        );
+        if (cat.rows.length === 0) return res.status(404).json({ error: 'Categoría no encontrada' });
+
+        const inUse = await db.execute(
+            'SELECT COUNT(*) AS count FROM group_expenses WHERE group_id = ? AND category = ? COLLATE NOCASE',
+            [groupId, cat.rows[0].name]
+        );
+        if (Number(inUse.rows[0].count) > 0) {
+            return res.status(409).json({ error: 'No podés borrar una categoría que ya tiene gastos. Editá esos gastos primero.' });
+        }
+
+        await db.execute('DELETE FROM group_categories WHERE id = ? AND group_id = ?', [categoryId, groupId]);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('[GROUPS] Error borrando categoría:', err);
         res.status(500).json({ error: 'Error interno en la base de datos' });
     }
 });

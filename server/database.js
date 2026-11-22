@@ -168,6 +168,20 @@ async function initDB() {
         )
     `);
 
+    // Categorías por grupo: las defaults se siembran al crear grupo y en migración.
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS group_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            created_by INTEGER,
+            created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            UNIQUE(group_id, name COLLATE NOCASE),
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        )
+    `);
+
     // ────────────────────────────────────────
     // Tablas existentes (compatibilidad legacy)
     // ────────────────────────────────────────
@@ -396,11 +410,32 @@ async function initDB() {
         }
     }
 
+    await seedDefaultCategories();
+
     // Bootstrap del superadmin: solo si la ENV existe y el usuario ya está cargado.
     // Si se registra más tarde, el handler de /api/register vuelve a intentarlo.
     await bootstrapSuperadmin(process.env.SUPERADMIN_USERNAME);
 
-    console.log('[DB] Tablas inicializadas: users, sessions, groups, group_members, group_expenses, group_splits, group_payments, expenses, expense_splits');
+    console.log('[DB] Tablas inicializadas: users, sessions, groups, group_members, group_expenses, group_splits, group_payments, group_categories, expenses, expense_splits');
+}
+
+const DEFAULT_CATEGORIES = ['Alimentación', 'Transporte', 'Ocio', 'Servicios', 'Otros'];
+
+async function seedDefaultCategories() {
+    try {
+        const groups = await db.execute('SELECT id, owner_id FROM groups');
+        for (const g of groups.rows) {
+            for (const name of DEFAULT_CATEGORIES) {
+                await db.execute({
+                    sql: 'INSERT OR IGNORE INTO group_categories (group_id, name, created_by) VALUES (?, ?, ?)',
+                    args: [g.id, name, g.owner_id || null]
+                });
+            }
+        }
+        if (groups.rows.length) console.log(`[DB] Categorías por defecto verificadas para ${groups.rows.length} grupos`);
+    } catch (err) {
+        console.error('[DB] Error sembrando categorías por defecto:', err.message);
+    }
 }
 
 initDB().catch(err => {

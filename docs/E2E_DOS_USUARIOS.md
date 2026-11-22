@@ -53,11 +53,11 @@
 | **B** | Recargá. Debe ver el mismo gasto `Cena` en el historial de **Viaje E2E**. |
 | **A y B** | Pestaña **Balances**: A ve «le deben 50», B ve «debe 50» (montos en UYU). |
 
-## Caso 5 — Reparto «Solo pagué yo» y centavos exactos
+## Caso 5 — Reparto «Solo para mí» y centavos exactos
 
 | | |
 |---|---|
-| **A** | Gasto `Taxi`, monto `10.01`, Split = `Solo pagué yo` → `Agregar gasto`. |
+| **A** | Gasto `Taxi`, monto `10.01`, Split = `Solo para mí` → `Guardar gasto`. |
 | **A** | Esperado: el desglose muestra todo para A. Los balances **no cambian** (A sigue con 50, B con 50). |
 | **A** | Gasto `Desayuno`, monto `10`, Split = `Montos exactos`: poné `6` al primero y `4` al segundo → `Agregar gasto`. |
 | **A** | Probá ahora `6.01` y `4`: debe aparecer el aviso **«Reparto incompleto»** y no se crea el gasto. Corregilo a `6`/`4` y recién ahí agregalo. |
